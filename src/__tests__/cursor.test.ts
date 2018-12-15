@@ -1,41 +1,59 @@
+import { nothing } from "immer";
 import { $, $safe, createStore, cursorToString, getCursorParent, isCursorReadonly, updateCursor } from "..";
 
-test("cursors work", () => {
-  let data = { users: [{ name: "first" }, { name: "second" }, { name: "third" }] };
-  const data$ = createStore(data);
+const originalData = { users: [{ name: "first" }, { name: "second" }, { name: "third" }] };
+
+let data = originalData;
+let data$ = createStore(data);
+let users$ = data$.users;
+let firstUser$ = users$[0];
+let firstUserName$ = firstUser$.name;
+let namesWithI$ = data$.users.filter(u => u.name.includes("i")).map(u => u.name);
+let broken$ = (data$ as any).doesntExist[0];
+beforeEach(() => {
+  data = originalData;
+  data$ = createStore(data);
+  users$ = data$.users;
+  firstUser$ = users$[0];
+  firstUserName$ = firstUser$.name;
+  namesWithI$ = data$.users.filter(u => u.name.includes("i")).map(u => u.name);
+  broken$ = (data$ as any).doesntExist[0];
+});
+
+test("cursorToString", () => {
   expect(cursorToString(data$)).toBe("store");
-  expect($(data$)).toBe(data);
-  expect($safe(data$)).toBe(data);
-
-  const users$ = data$.users;
   expect(cursorToString(users$)).toBe("store/users");
-  expect($(users$)).toBe(data.users);
-
-  const firstUser$ = users$[0];
   expect(cursorToString(firstUser$)).toBe("store/users/0");
-  expect($(firstUser$)).toEqual(data.users[0]);
-
-  const firstUserName$ = firstUser$.name;
-  expect(isCursorReadonly(firstUserName$)).toBeFalsy();
   expect(cursorToString(firstUserName$)).toBe("store/users/0/name");
-  expect($(firstUserName$)).toBe(data.users[0].name);
-
-  // check function calls
-  const namesWithI$ = data$.users.filter(u => u.name.includes("i")).map(u => u.name);
-  expect(isCursorReadonly(namesWithI$)).toBeTruthy();
   expect(cursorToString(namesWithI$)).toBe("store/users/filter(...)/map(...)");
+});
+
+test("reading values", () => {
+  expect($(data$)).toBe(data);
+  expect($(users$)).toBe(data.users);
+  expect($(firstUser$)).toEqual(data.users[0]);
+  expect($(firstUserName$)).toBe(data.users[0].name);
   expect($(namesWithI$)).toEqual(["first", "third"]);
-
-  // a broken cursor should fail, unless wrapped in _safe
-  const broken$ = (data$ as any).doesntExist[0];
   expect(() => $(broken$)).toThrow("Cannot read property '0' of undefined");
-  expect($safe(broken$)).toBe(undefined);
+});
 
-  // getParent works
+test("reading values in a safe way", () => {
+  expect($safe(data$)).toBe(data);
+  expect($safe(broken$)).toBe(undefined);
+});
+
+test("isCursorReadonly", () => {
+  expect(isCursorReadonly(firstUserName$)).toBeFalsy();
+  expect(isCursorReadonly(namesWithI$)).toBeTruthy();
+});
+
+test("getCursorParent", () => {
   const firstUserParent$ = getCursorParent(firstUser$);
   expect(firstUserParent$).toBe(users$);
   expect($(firstUserParent$)).toBe(data.users);
+});
 
+test("cursor caching", () => {
   // identical cursors are equal
   expect(data$.users === data$.users).toBeTruthy();
   expect(data$.users[0] === data$.users[0]).toBeTruthy();
@@ -43,22 +61,31 @@ test("cursors work", () => {
 
   // except when they have functions (we don't know if the arguments are the same)
   expect(data$.users.filter(u => u) === data$.users.filter(u => u)).toBeFalsy();
+});
 
-  // update - without returning new value
+test("update - no return value", () => {
   expect($(data$)).toBe(data);
   updateCursor(firstUser$, u => {
     u.name += "_updated";
   });
   expect($(firstUserName$)).toBe("first_updated");
   expect($(data$)).not.toBe(data);
-  data = $(data$);
+});
 
-  // update - returning new value
+test("update - return value", () => {
   expect($(data$)).toBe(data);
   updateCursor(firstUserName$, name => {
     return name + "_updated";
   });
-  expect($(firstUserName$)).toBe("first_updated_updated");
+  expect($(firstUserName$)).toBe("first_updated");
   expect($(data$)).not.toBe(data);
-  data = $(data$);
+});
+
+test("update - return nothing", () => {
+  expect($(data$)).toBe(data);
+  updateCursor(firstUserName$, () => {
+    return nothing;
+  });
+  expect($(firstUserName$)).toBe(undefined);
+  expect($(data$)).not.toBe(data);
 });

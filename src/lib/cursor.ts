@@ -290,6 +290,15 @@ export function getCursorParent<T = any>(cursor: any): T {
   return parent.proxy;
 }
 
+/**
+ * Updates the value/values a cursor points to.
+ * See `immer`'s `produce` method.
+ *
+ * @export
+ * @template T
+ * @param {T} cursor
+ * @param {((draft: T) => T | void)} recipe
+ */
 export function updateCursor<T>(cursor: T, recipe: (draft: T) => T | void): void {
   if (isCursorReadonly(cursor)) {
     throw new Error("cannot update a readonly function - does the cursor include a function call?");
