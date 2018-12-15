@@ -1,5 +1,5 @@
 import { nothing } from "immer";
-import { broken, createStore, cursorToString, getParent, isReadonly, subscribe, update, _, _safe } from "..";
+import { broken, createStore, cursorToString, getParent, isFunctional, subscribe, update, _, _safe } from "..";
 
 const originalData = {
   users: [{ name: "first", active: true }, { name: "second", active: false }, { name: "third", active: true }]
@@ -48,9 +48,9 @@ test("reading values in a safe way", () => {
   expect(_safe(broken$)).toBe(broken);
 });
 
-test("isReadonly", () => {
-  expect(isReadonly(firstUserName$)).toBeFalsy();
-  expect(isReadonly(activeUsers$)).toBeTruthy();
+test("isFunctional", () => {
+  expect(isFunctional(firstUserName$)).toBeFalsy();
+  expect(isFunctional(activeUsers$)).toBeTruthy();
 });
 
 test("getParent", () => {
@@ -96,12 +96,12 @@ test("update - return nothing", () => {
   expect(_(data$)).not.toBe(data);
 });
 
-test("update - readonly throws", () => {
+test("update - functional throws", () => {
   expect(() =>
     update(activeUsers$, () => {
       // emtpy
     })
-  ).toThrow("cannot update a readonly cursor");
+  ).toThrow("cannot update a functional cursor");
 });
 
 test("subscription - values", () => {
@@ -158,4 +158,27 @@ test("subscription - functions", () => {
     fu.active = !fu.active;
   });
   expect(calls).toBe(1);
+});
+
+test("function cursor value caching", () => {
+  const activeUsers1 = _(activeUsers$);
+  const activeUsers2 = _(activeUsers$);
+
+  expect(activeUsers1).toBe(activeUsers2);
+
+  update(firstUser$, fu => {
+    fu.active = !fu.active;
+  });
+
+  // different reference and value
+  expect(_(activeUsers$)).not.toEqual(activeUsers1);
+  expect(_(activeUsers$)).not.toBe(activeUsers1);
+
+  update(firstUser$, fu => {
+    fu.active = !fu.active;
+  });
+
+  // same value, but different reference
+  expect(_(activeUsers$)).toEqual(activeUsers1);
+  expect(_(activeUsers$)).not.toBe(activeUsers1);
 });

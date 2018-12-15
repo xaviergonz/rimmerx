@@ -7,7 +7,17 @@ export interface CursorObject {
   path: CursorStep[];
   parent?: CursorObject;
   proxy: any;
-  readonly: boolean;
+  functional: boolean;
+
+  memoizedValue?: {
+    lastChange: number;
+    result: any;
+  };
+
+  safeMemoizedValue?: {
+    lastChange: number;
+    result: any;
+  };
 
   cache: Map<CursorStep, CursorObject>;
 }
@@ -18,9 +28,12 @@ export class CursorCallStep {
   constructor(readonly ctx: any, readonly args: any) {}
 }
 
-interface Store<T> {
+interface StoreData<T> {
   store: T;
+  nofChanges: number;
+}
 
+interface Store<T> extends StoreData<T> {
   subscribe(fn: () => void): Disposer;
 }
 
@@ -58,15 +71,15 @@ export function getStore<T = any>(cursor: any): Store<T> {
 }
 
 /**
- * Returns if a cursor is readonly.
- * A cursor is considered readonly if it includes a function call.
+ * Returns if a cursor is functional.
+ * A cursor is considered functional if it includes a function call.
  *
  * @export
  * @param {*} cursor
  * @returns {boolean}
  */
-export function isReadonly(cursor: any): boolean {
-  return getCursorObject(cursor).readonly;
+export function isFunctional(cursor: any): boolean {
+  return getCursorObject(cursor).functional;
 }
 
 /**
@@ -120,12 +133,28 @@ function stepCursor(cursor: any, step: CursorStep) {
   return newCursorObject(cursorObj.store, [...cursorObj.path, step], cursorObj);
 }
 
-function runCursor(cursor: any, stopAtUndefinedOrNull: boolean, store?: any) {
+function runCursor<T>(cursor: T, safeMode: boolean, alternateStore?: StoreData<any>): T | typeof broken {
+  if (devMode) {
+    const functional = isFunctional(cursor);
+    if (functional && alternateStore) {
+      throw new Error("functional cursors cannot run over alternate stores");
+    }
+  }
+
   const cursorObj = getCursorObject(cursor);
-  let value = store || cursorObj.store;
+  const store: Store<any> = alternateStore || cursorObj.store;
+
+  if (!alternateStore) {
+    const oldMemoizedValue = safeMode ? cursorObj.safeMemoizedValue : cursorObj.memoizedValue;
+    if (oldMemoizedValue && oldMemoizedValue.lastChange === store.nofChanges) {
+      return oldMemoizedValue.result;
+    }
+  }
+
+  let value: any = store;
 
   for (const step of cursorObj.path) {
-    if (stopAtUndefinedOrNull && (value === undefined || value === null)) {
+    if (safeMode && (value === undefined || value === null)) {
       return broken;
     }
     if (step instanceof CursorCallStep) {
@@ -135,6 +164,19 @@ function runCursor(cursor: any, stopAtUndefinedOrNull: boolean, store?: any) {
       value = value[step];
     }
   }
+
+  if (!alternateStore) {
+    const newMemoizedValue = {
+      lastChange: store.nofChanges,
+      result: value
+    };
+    if (!safeMode) {
+      cursorObj.memoizedValue = newMemoizedValue;
+    } else {
+      cursorObj.safeMemoizedValue = newMemoizedValue;
+    }
+  }
+
   return value;
 }
 
@@ -153,16 +195,16 @@ function newCursorObject(store: any, path: CursorStep[], parentCursorObject: Cur
     // do nothing, this is just to keep the proxy happy when invoking functions
   }
 
-  let readonly: boolean = false;
+  let functional: boolean = false;
   if (parentCursorObject) {
-    readonly = parentCursorObject.readonly || lastStep instanceof CursorCallStep;
+    functional = parentCursorObject.functional || lastStep instanceof CursorCallStep;
   }
 
   cursor.store = store;
   cursor.path = freezeData(path);
   cursor.parent = parentCursorObject;
   cursor.proxy = new Proxy(cursor as any, cursorProxyHandler);
-  cursor.readonly = readonly;
+  cursor.functional = functional;
   cursor.cache = new Map();
 
   if (parentCursorObject) {
@@ -228,6 +270,7 @@ const cursorProxyHandler: ProxyHandler<CursorObject> = {
  */
 export function createStore<T>(data: T): T {
   let currentData = freezeData(data);
+  let nofChanges = 0;
   const subscriptions: Set<() => void> = new Set();
 
   const storeObject: Store<T> = {
@@ -239,8 +282,14 @@ export function createStore<T>(data: T): T {
         return;
       }
       currentData = freezeData(newStore);
+      nofChanges++;
       subscriptions.forEach(s => s());
     },
+
+    get nofChanges() {
+      return nofChanges;
+    },
+
     subscribe(fn: () => void): Disposer {
       subscriptions.add(fn);
       return () => {
@@ -261,7 +310,7 @@ export function createStore<T>(data: T): T {
  * @returns {T}
  */
 export function _<T>(cursor: T): T {
-  return runCursor(cursor, false);
+  return runCursor(cursor, false) as T;
 }
 
 export const broken = Symbol("broken");
@@ -315,17 +364,18 @@ export function getParent<T = any>(cursor: any): T {
  * @param {((draft: T) => T | void)} recipe
  */
 export function update<T>(cursor: T, recipe: (draft: T) => T | void): void {
-  if (isReadonly(cursor)) {
-    throw new Error("cannot update a readonly cursor - does the cursor include a function call?");
+  if (isFunctional(cursor)) {
+    throw new Error("cannot update a functional cursor - does the cursor include a function call?");
   }
 
   const storeObj = getStore(cursor);
   storeObj.store = produce(storeObj.store, draftStoreRoot => {
-    const draftStore = {
-      store: draftStoreRoot
+    const draftStore: StoreData<any> = {
+      store: draftStoreRoot,
+      nofChanges: storeObj.nofChanges
     };
 
-    const draftTarget = runCursor(cursor, false, draftStore);
+    const draftTarget = runCursor(cursor, false, draftStore) as T;
 
     let newValue: any = recipe(draftTarget);
 
