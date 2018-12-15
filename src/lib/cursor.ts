@@ -20,6 +20,8 @@ export class CursorCallStep {
 
 interface Store<T> {
   store: T;
+
+  subscribe(fn: () => void): Disposer;
 }
 
 const cursorObject = Symbol("cursorObject");
@@ -124,7 +126,7 @@ function runCursor(cursor: any, stopAtUndefinedOrNull: boolean, store?: any) {
 
   for (const step of cursorObj.path) {
     if (stopAtUndefinedOrNull && (value === undefined || value === null)) {
-      return undefined;
+      return broken;
     }
     if (step instanceof CursorCallStep) {
       const targetThis = isCursor(step.ctx) ? $(step.ctx) : step.ctx;
@@ -226,13 +228,24 @@ const cursorProxyHandler: ProxyHandler<CursorObject> = {
  */
 export function createStore<T>(data: T): T {
   let currentData = freezeData(data);
+  const subscriptions: Set<() => void> = new Set();
 
   const storeObject: Store<T> = {
     get store() {
       return currentData;
     },
     set store(newStore: T) {
+      if (newStore === currentData) {
+        return;
+      }
       currentData = freezeData(newStore);
+      subscriptions.forEach(s => s());
+    },
+    subscribe(fn: () => void): Disposer {
+      subscriptions.add(fn);
+      return () => {
+        subscriptions.delete(fn);
+      };
     }
   };
 
@@ -251,15 +264,17 @@ export function $<T>(cursor: T): T {
   return runCursor(cursor, false);
 }
 
+export const broken = Symbol("broken");
+
 /**
- * Executes a cursor query, returning its result, or undefined if at some part of the evalution the value in the middle is undefined/null.
+ * Executes a cursor query, returning its result, or broken if at some part of the evalution the value in the middle is undefined/null.
  *
  * @export
  * @template T
  * @param {T} cursor
- * @returns {(T | undefined)}
+ * @returns {(T | typeof broken)}
  */
-export function $safe<T>(cursor: T): T | undefined {
+export function $safe<T>(cursor: T): T | typeof broken {
   return runCursor(cursor, true);
 }
 
@@ -324,6 +339,26 @@ export function update<T>(cursor: T, recipe: (draft: T) => T | void): void {
       const path = getPath(cursor);
       const key = path[path.length - 1];
       draftParentTarget[key as any] = newValue;
+    }
+  });
+}
+
+export type Disposer = () => void;
+
+export function subscribe<T>(
+  cursor: T,
+  subscription: (newValue: T | typeof broken, oldValue: T | typeof broken) => void
+): Disposer {
+  let currentValue = $(cursor);
+
+  const store = getStore(cursor);
+  return store.subscribe(() => {
+    const oldValue = currentValue;
+    const newValue = $(cursor);
+    currentValue = newValue;
+
+    if (oldValue !== newValue) {
+      subscription(newValue, oldValue);
     }
   });
 }

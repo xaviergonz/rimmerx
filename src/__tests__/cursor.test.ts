@@ -1,5 +1,6 @@
 import { nothing } from "immer";
-import { $, $safe, createStore, cursorToString, getParent, isReadonly, update } from "..";
+import { $, $safe, broken, createStore, cursorToString, getParent, isReadonly, update } from "..";
+import { subscribe } from "../lib/cursor";
 
 const originalData = { users: [{ name: "first" }, { name: "second" }, { name: "third" }] };
 
@@ -35,11 +36,14 @@ test("reading values", () => {
   expect($(firstUserName$)).toBe(data.users[0].name);
   expect($(namesWithI$)).toEqual(["first", "third"]);
   expect(() => $(broken$)).toThrow("Cannot read property '0' of undefined");
+
+  const toUndefined$ = (data$ as any).notExists;
+  expect($safe(toUndefined$)).toBe(undefined);
 });
 
 test("reading values in a safe way", () => {
   expect($safe(data$)).toBe(data);
-  expect($safe(broken$)).toBe(undefined);
+  expect($safe(broken$)).toBe(broken);
 });
 
 test("isReadonly", () => {
@@ -96,4 +100,32 @@ test("update - readonly throws", () => {
       // emtpy
     })
   ).toThrow("cannot update a readonly cursor");
+});
+
+test("subscription", () => {
+  let calls = 0;
+  const disposer = subscribe(firstUserName$, (newVal, oldVal) => {
+    calls++;
+    expect(newVal).toBe("first_updated");
+    expect(oldVal).toBe("first");
+  });
+
+  // no call if unchanged
+  update(firstUserName$, name => {
+    return name;
+  });
+  expect(calls).toBe(0);
+
+  // call when changed
+  update(firstUserName$, () => {
+    return "first_updated";
+  });
+  expect(calls).toBe(1);
+
+  // no call if disposed
+  disposer();
+  update(firstUserName$, name => {
+    return name + "_updated";
+  });
+  expect(calls).toBe(1);
 });
