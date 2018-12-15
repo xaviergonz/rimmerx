@@ -1,23 +1,25 @@
 import { nothing } from "immer";
-import { $, $safe, broken, createStore, cursorToString, getParent, isReadonly, update } from "..";
-import { subscribe } from "../lib/cursor";
+import { broken, createStore, cursorToString, getParent, isReadonly, subscribe, update, _, _safe } from "..";
 
-const originalData = { users: [{ name: "first" }, { name: "second" }, { name: "third" }] };
+const originalData = {
+  users: [{ name: "first", active: true }, { name: "second", active: false }, { name: "third", active: true }]
+};
 
 let data = originalData;
 let data$ = createStore(data);
 let users$ = data$.users;
 let firstUser$ = users$[0];
 let firstUserName$ = firstUser$.name;
-let namesWithI$ = data$.users.filter(u => u.name.includes("i")).map(u => u.name);
+let activeUsers$ = data$.users.filter(u => u.active).map(u => u.name);
 let broken$ = (data$ as any).doesntExist[0];
+
 beforeEach(() => {
   data = originalData;
   data$ = createStore(data);
   users$ = data$.users;
   firstUser$ = users$[0];
   firstUserName$ = firstUser$.name;
-  namesWithI$ = data$.users.filter(u => u.name.includes("i")).map(u => u.name);
+  activeUsers$ = activeUsers$ = data$.users.filter(u => u.active).map(u => u.name);
   broken$ = (data$ as any).doesntExist[0];
 });
 
@@ -26,35 +28,35 @@ test("cursorToString", () => {
   expect(cursorToString(users$)).toBe("store/users");
   expect(cursorToString(firstUser$)).toBe("store/users/0");
   expect(cursorToString(firstUserName$)).toBe("store/users/0/name");
-  expect(cursorToString(namesWithI$)).toBe("store/users/filter(...)/map(...)");
+  expect(cursorToString(activeUsers$)).toBe("store/users/filter(...)/map(...)");
 });
 
 test("reading values", () => {
-  expect($(data$)).toBe(data);
-  expect($(users$)).toBe(data.users);
-  expect($(firstUser$)).toEqual(data.users[0]);
-  expect($(firstUserName$)).toBe(data.users[0].name);
-  expect($(namesWithI$)).toEqual(["first", "third"]);
-  expect(() => $(broken$)).toThrow("Cannot read property '0' of undefined");
+  expect(_(data$)).toBe(data);
+  expect(_(users$)).toBe(data.users);
+  expect(_(firstUser$)).toEqual(data.users[0]);
+  expect(_(firstUserName$)).toBe(data.users[0].name);
+  expect(_(activeUsers$)).toEqual(["first", "third"]);
+  expect(() => _(broken$)).toThrow("Cannot read property '0' of undefined");
 
   const toUndefined$ = (data$ as any).notExists;
-  expect($safe(toUndefined$)).toBe(undefined);
+  expect(_safe(toUndefined$)).toBe(undefined);
 });
 
 test("reading values in a safe way", () => {
-  expect($safe(data$)).toBe(data);
-  expect($safe(broken$)).toBe(broken);
+  expect(_safe(data$)).toBe(data);
+  expect(_safe(broken$)).toBe(broken);
 });
 
 test("isReadonly", () => {
   expect(isReadonly(firstUserName$)).toBeFalsy();
-  expect(isReadonly(namesWithI$)).toBeTruthy();
+  expect(isReadonly(activeUsers$)).toBeTruthy();
 });
 
 test("getParent", () => {
   const firstUserParent$ = getParent(firstUser$);
   expect(firstUserParent$).toBe(users$);
-  expect($(firstUserParent$)).toBe(data.users);
+  expect(_(firstUserParent$)).toBe(data.users);
 });
 
 test("cursor caching", () => {
@@ -68,41 +70,41 @@ test("cursor caching", () => {
 });
 
 test("update - no return value", () => {
-  expect($(data$)).toBe(data);
+  expect(_(data$)).toBe(data);
   update(firstUser$, u => {
     u.name += "_updated";
   });
-  expect($(firstUserName$)).toBe("first_updated");
-  expect($(data$)).not.toBe(data);
+  expect(_(firstUserName$)).toBe("first_updated");
+  expect(_(data$)).not.toBe(data);
 });
 
 test("update - return value", () => {
-  expect($(data$)).toBe(data);
+  expect(_(data$)).toBe(data);
   update(firstUserName$, name => {
     return name + "_updated";
   });
-  expect($(firstUserName$)).toBe("first_updated");
-  expect($(data$)).not.toBe(data);
+  expect(_(firstUserName$)).toBe("first_updated");
+  expect(_(data$)).not.toBe(data);
 });
 
 test("update - return nothing", () => {
-  expect($(data$)).toBe(data);
+  expect(_(data$)).toBe(data);
   update(firstUserName$, () => {
     return nothing;
   });
-  expect($(firstUserName$)).toBe(undefined);
-  expect($(data$)).not.toBe(data);
+  expect(_(firstUserName$)).toBe(undefined);
+  expect(_(data$)).not.toBe(data);
 });
 
 test("update - readonly throws", () => {
   expect(() =>
-    update(namesWithI$, () => {
+    update(activeUsers$, () => {
       // emtpy
     })
   ).toThrow("cannot update a readonly cursor");
 });
 
-test("subscription", () => {
+test("subscription - values", () => {
   let calls = 0;
   const disposer = subscribe(firstUserName$, (newVal, oldVal) => {
     calls++;
@@ -126,6 +128,34 @@ test("subscription", () => {
   disposer();
   update(firstUserName$, name => {
     return name + "_updated";
+  });
+  expect(calls).toBe(1);
+});
+
+test("subscription - functions", () => {
+  let calls = 0;
+  const disposer = subscribe(activeUsers$, (newVal, oldVal) => {
+    calls++;
+    expect(newVal).toEqual(["third"]);
+    expect(oldVal).toEqual(["first", "third"]);
+  });
+
+  // no call if unchanged
+  update(firstUser$, fu => {
+    fu.active = fu.active;
+  });
+  expect(calls).toBe(0);
+
+  // call when changed
+  update(firstUser$, fu => {
+    fu.active = !fu.active;
+  });
+  expect(calls).toBe(1);
+
+  // no call if disposed
+  disposer();
+  update(firstUser$, fu => {
+    fu.active = !fu.active;
   });
   expect(calls).toBe(1);
 });

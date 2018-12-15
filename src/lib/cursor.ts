@@ -129,7 +129,7 @@ function runCursor(cursor: any, stopAtUndefinedOrNull: boolean, store?: any) {
       return broken;
     }
     if (step instanceof CursorCallStep) {
-      const targetThis = isCursor(step.ctx) ? $(step.ctx) : step.ctx;
+      const targetThis = isCursor(step.ctx) ? _(step.ctx) : step.ctx;
       value = value.apply(targetThis, step.args);
     } else {
       value = value[step];
@@ -260,7 +260,7 @@ export function createStore<T>(data: T): T {
  * @param {T} cursor
  * @returns {T}
  */
-export function $<T>(cursor: T): T {
+export function _<T>(cursor: T): T {
   return runCursor(cursor, false);
 }
 
@@ -274,7 +274,7 @@ export const broken = Symbol("broken");
  * @param {T} cursor
  * @returns {(T | typeof broken)}
  */
-export function $safe<T>(cursor: T): T | typeof broken {
+export function _safe<T>(cursor: T): T | typeof broken {
   return runCursor(cursor, true);
 }
 
@@ -349,12 +349,12 @@ export function subscribe<T>(
   cursor: T,
   subscription: (newValue: T | typeof broken, oldValue: T | typeof broken) => void
 ): Disposer {
-  let currentValue = $(cursor);
+  let currentValue = _(cursor);
 
   const store = getStore(cursor);
   return store.subscribe(() => {
     const oldValue = currentValue;
-    const newValue = $(cursor);
+    const newValue = _(cursor);
     currentValue = newValue;
 
     if (oldValue !== newValue) {
