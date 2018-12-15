@@ -1,5 +1,5 @@
 import { nothing } from "immer";
-import { $, $safe, createStore, cursorToString, getCursorParent, isCursorReadonly, updateCursor } from "..";
+import { $, $safe, createStore, cursorToString, getParent, isReadonly, update } from "..";
 
 const originalData = { users: [{ name: "first" }, { name: "second" }, { name: "third" }] };
 
@@ -42,13 +42,13 @@ test("reading values in a safe way", () => {
   expect($safe(broken$)).toBe(undefined);
 });
 
-test("isCursorReadonly", () => {
-  expect(isCursorReadonly(firstUserName$)).toBeFalsy();
-  expect(isCursorReadonly(namesWithI$)).toBeTruthy();
+test("isReadonly", () => {
+  expect(isReadonly(firstUserName$)).toBeFalsy();
+  expect(isReadonly(namesWithI$)).toBeTruthy();
 });
 
-test("getCursorParent", () => {
-  const firstUserParent$ = getCursorParent(firstUser$);
+test("getParent", () => {
+  const firstUserParent$ = getParent(firstUser$);
   expect(firstUserParent$).toBe(users$);
   expect($(firstUserParent$)).toBe(data.users);
 });
@@ -65,7 +65,7 @@ test("cursor caching", () => {
 
 test("update - no return value", () => {
   expect($(data$)).toBe(data);
-  updateCursor(firstUser$, u => {
+  update(firstUser$, u => {
     u.name += "_updated";
   });
   expect($(firstUserName$)).toBe("first_updated");
@@ -74,7 +74,7 @@ test("update - no return value", () => {
 
 test("update - return value", () => {
   expect($(data$)).toBe(data);
-  updateCursor(firstUserName$, name => {
+  update(firstUserName$, name => {
     return name + "_updated";
   });
   expect($(firstUserName$)).toBe("first_updated");
@@ -83,9 +83,17 @@ test("update - return value", () => {
 
 test("update - return nothing", () => {
   expect($(data$)).toBe(data);
-  updateCursor(firstUserName$, () => {
+  update(firstUserName$, () => {
     return nothing;
   });
   expect($(firstUserName$)).toBe(undefined);
   expect($(data$)).not.toBe(data);
+});
+
+test("update - readonly throws", () => {
+  expect(() =>
+    update(namesWithI$, () => {
+      // emtpy
+    })
+  ).toThrow("cannot update a readonly cursor");
 });

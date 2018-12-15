@@ -51,7 +51,7 @@ function getCursorObject(cursor: any): CursorObject {
  * @param {*} cursor
  * @returns {*}
  */
-export function getCursorStore<T = any>(cursor: any): Store<T> {
+export function getStore<T = any>(cursor: any): Store<T> {
   return getCursorObject(cursor).store;
 }
 
@@ -63,7 +63,7 @@ export function getCursorStore<T = any>(cursor: any): Store<T> {
  * @param {*} cursor
  * @returns {boolean}
  */
-export function isCursorReadonly(cursor: any): boolean {
+export function isReadonly(cursor: any): boolean {
   return getCursorObject(cursor).readonly;
 }
 
@@ -74,7 +74,7 @@ export function isCursorReadonly(cursor: any): boolean {
  * @param {*} cursor
  * @returns {CursorStep[]}
  */
-export function getCursorPath(cursor: any): CursorStep[] {
+export function getPath(cursor: any): CursorStep[] {
   return getCursorObject(cursor).path;
 }
 
@@ -270,7 +270,7 @@ export function $safe<T>(cursor: T): T | undefined {
  * @param {*} cursor
  * @returns {boolean}
  */
-export function cursorHasParent(cursor: any): boolean {
+export function hasParent(cursor: any): boolean {
   return !!getCursorObject(cursor).parent;
 }
 
@@ -282,7 +282,7 @@ export function cursorHasParent(cursor: any): boolean {
  * @param {T} cursor
  * @returns {T}
  */
-export function getCursorParent<T = any>(cursor: any): T {
+export function getParent<T = any>(cursor: any): T {
   const parent = getCursorObject(cursor).parent;
   if (!parent) {
     throw new Error("cursor does not have a parent");
@@ -299,12 +299,12 @@ export function getCursorParent<T = any>(cursor: any): T {
  * @param {T} cursor
  * @param {((draft: T) => T | void)} recipe
  */
-export function updateCursor<T>(cursor: T, recipe: (draft: T) => T | void): void {
-  if (isCursorReadonly(cursor)) {
-    throw new Error("cannot update a readonly function - does the cursor include a function call?");
+export function update<T>(cursor: T, recipe: (draft: T) => T | void): void {
+  if (isReadonly(cursor)) {
+    throw new Error("cannot update a readonly cursor - does the cursor include a function call?");
   }
 
-  const storeObj = getCursorStore(cursor);
+  const storeObj = getStore(cursor);
   storeObj.store = produce(storeObj.store, draftStoreRoot => {
     const draftStore = {
       store: draftStoreRoot
@@ -319,9 +319,9 @@ export function updateCursor<T>(cursor: T, recipe: (draft: T) => T | void): void
       if (newValue === nothing) {
         newValue = undefined;
       }
-      const parentCursor = getCursorParent(cursor);
+      const parentCursor = getParent(cursor);
       const draftParentTarget = runCursor(parentCursor, false, draftStore);
-      const path = getCursorPath(cursor);
+      const path = getPath(cursor);
       const key = path[path.length - 1];
       draftParentTarget[key as any] = newValue;
     }
