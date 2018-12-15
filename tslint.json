@@ -9,6 +9,7 @@
     "no-parameter-reassignment": true,
     "object-literal-sort-keys": false,
     "member-access": false,
-    "prefer-conditional-expression": false
+    "prefer-conditional-expression": false,
+    "ordered-imports": false
   }
 }

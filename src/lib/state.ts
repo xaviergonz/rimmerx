@@ -1,33 +1,3 @@
-/*const selectorSymbol = Symbol('selector');
-interface SelectorInstance<T> {
-  [selectorSymbol]: true;
-  // tslint:disable-next-line:callable-types
-  (): T;
-}
-
-type Primitive = number | string | undefined | null;
-
-interface PrimitiveSelector<T extends Primitive> extends SelectorInstance<T> {}
-type ObjectSelector<T extends {}> = {[k in keyof T]: Selector<T[k]>} & SelectorInstance<T>
-interface ArraySelector<T> extends Array<Selector<T>> {}
-
-export type Selector<T> = T extends Primitive ? PrimitiveSelector<T> : T extends Array<infer A> ? ArraySelector<A> : ObjectSelector<T>;
-
-export function $<T>(data: T): Selector<T> {
-  // TODO: would return the proxies thing
-  return data as any;
-}
-
-const data = {users: [{name: "hoh"}]};
-const data$ = $(data);
-
-const users$ = data$.users;
-const firstUser$ = users$[0];
-const firstUser = firstUser$();
-
-const firstUserName$ = firstUser$.name;
-const firstUserName = firstUserName$();*/
-
 /*import {produce} from "immer"
 
 const isStoreSymbol = Symbol('store');
