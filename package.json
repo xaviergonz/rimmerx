@@ -22,7 +22,9 @@
     "clean": "trash build test",
     "all": "run-s reset test doc:html"
   },
-  "dependencies": {},
+  "dependencies": {
+    "immer": "^1.8.2"
+  },
   "devDependencies": {
     "@types/jest": "^23.3.10",
     "gh-pages": "^2.0.1",

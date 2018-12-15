@@ -1,5 +1,13 @@
 {
-  "typescript.tsdk": "node_modules/typescript/lib"
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": true
+  },
+  "tslint.packageManager": "yarn",
+  "eslint.packageManager": "yarn",
+  "eslint.enable": false,
+  "editor.formatOnSave": true,
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "npm.packageManager": "yarn"
   // "typescript.implementationsCodeLens.enabled": true
   // "typescript.referencesCodeLens.enabled": true
 }

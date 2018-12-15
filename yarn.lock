@@ -1728,6 +1728,11 @@ ignore@^3.3.5:
   resolved "https://registry.yarnpkg.com/ignore/-/ignore-3.3.10.tgz#0a97fb876986e8081c631160f8f9f389157f0043"
   integrity sha512-Pgs951kaMm5GXP7MOvxERINe3gsaVjUWFm+UZPSq9xYriQAksyhg0csnS0KXSNRD5NmNdapXEpjxG49+AKh/ug==
 
+immer@^1.8.2:
+  version "1.8.2"
+  resolved "https://registry.yarnpkg.com/immer/-/immer-1.8.2.tgz#111e9c9e6832c833868f3f6481758a421f63f403"
+  integrity sha512-uP9EI4hmRTlZ+d4YYmd7JMlxf8I3KPHnvWfLNjpOv/cQNRV/dKHL8L3cZ7z6OCuRQnK59Uu5LJr/KxViqAiEQQ==
+
 import-local@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/import-local/-/import-local-1.0.0.tgz#5e4ffdc03f4fe6c009c6729beb29631c2f8227bc"
