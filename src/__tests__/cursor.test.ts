@@ -37,11 +37,11 @@ beforeEach(() => {
 });
 
 test("cursorToString", () => {
-  expect(cursorToString(data$)).toBe("store");
-  expect(cursorToString(users$)).toBe("store/users");
-  expect(cursorToString(firstUser$)).toBe("store/users/0");
-  expect(cursorToString(firstUserName$)).toBe("store/users/0/name");
-  expect(cursorToString(activeUsers$)).toBe("store/users/filter(...)/map(...)");
+  expect(cursorToString(data$)).toBe("/");
+  expect(cursorToString(users$)).toBe("/users");
+  expect(cursorToString(firstUser$)).toBe("/users/0");
+  expect(cursorToString(firstUserName$)).toBe("/users/0/name");
+  expect(cursorToString(activeUsers$)).toBe("/users/filter(...)/map(...)");
 });
 
 test("reading values", () => {

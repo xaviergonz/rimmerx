@@ -112,7 +112,7 @@ export function isCursor(cursor: any): boolean {
  * Gets the string representation of a cursor.
  *
  * ```js
- * cursorToString($(data).users[0].find(u => u === "John").name)) // -> root/users/0/find(...)/name
+ * cursorToString($(data).users[0].find(u => u === "John").name)) // -> /users/0/find(...)/name
  * ```
  *
  * @export
@@ -122,14 +122,14 @@ export function isCursor(cursor: any): boolean {
 export function cursorToString(cursor: any): string {
   const info = getCursorObject(cursor);
   const str: string[] = [];
-  for (const step of info.path) {
+  for (const step of info.path.slice(1)) {
     if (step instanceof CursorCallStep) {
       str[str.length - 1] += "(...)";
     } else {
       str.push(String(step));
     }
   }
-  return str.join("/");
+  return "/" + str.join("/");
 }
 
 function stepCursor(cursor: any, step: CursorStep) {
