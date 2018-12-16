@@ -45,10 +45,12 @@ const lensProxyHandler: ProxyHandler<LensObject<any, any>> = {
     return true;
   },
   getOwnPropertyDescriptor(targetLensObj, p) {
-    return Reflect.getOwnPropertyDescriptor(_(targetLensObj.cursor$), p);
+    // we override configurable since else object keys and other methods
+    // will throw an exception when the original is not configurable
+    return { ...Reflect.getOwnPropertyDescriptor(_(targetLensObj.cursor$), p), configurable: true };
   },
   has(targetLensObj, p) {
-    return p in _(targetLensObj.cursor$);
+    return Reflect.has(_(targetLensObj.cursor$), p);
   },
   get(targetLensObj, key) {
     switch (key) {

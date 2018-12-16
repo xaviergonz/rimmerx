@@ -33,12 +33,15 @@ function freeze<T>(value: T): T {
 /**
  * @internal
  * @private
- * Recursively freeze a value (if not in production)
  */
 function deepFreeze<T>(value: T): T {
   freeze(value);
 
-  if (isPlainObject(value)) {
+  if (Array.isArray(value)) {
+    value.forEach(v => {
+      deepFreeze(v);
+    });
+  } else if (isPlainObject(value)) {
     Object.keys(value).forEach(propKey => {
       if (!isPrimitive((value as any)[propKey]) && !Object.isFrozen((value as any)[propKey])) {
         deepFreeze((value as any)[propKey]);

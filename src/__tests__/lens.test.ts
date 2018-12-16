@@ -1,5 +1,6 @@
 import { createStore, lens, _ } from "..";
 import { subscribeTo } from "../lib/cursor";
+import { devMode } from "../lib/devMode";
 
 interface User {
   name: string;
@@ -9,6 +10,11 @@ interface User {
 const userLens = lens((user: User) => ({
   get stringData() {
     return user.active ? `${user.name} (active)` : `${user.name} (inactive)`;
+  },
+
+  get writeGetter() {
+    user.name = "write";
+    return "write";
   },
 
   setNameAndActive(val: string, active: boolean): string {
@@ -44,7 +50,7 @@ let data = originalData;
 let data$ = createStore(data);
 let users$ = data$.users;
 let firstUser$ = users$[0];
-// let firstUserName$ = firstUser$.name;
+let firstUserName$ = firstUser$.name;
 // let activeUsers$ = data$.users.filter(u => u.active).map(u => u.name);
 // let broken$ = (data$ as any).doesntExist[0];
 let firstUser = userLens(firstUser$);
@@ -55,7 +61,7 @@ beforeEach(() => {
   data$ = createStore(data);
   users$ = data$.users;
   firstUser$ = users$[0];
-  // firstUserName$ = firstUser$.name;
+  firstUserName$ = firstUser$.name;
   // activeUsers$ = activeUsers$ = data$.users.filter(u => u.active).map(u => u.name);
   // broken$ = (data$ as any).doesntExist[0];
   firstUser = userLens(firstUser$);
@@ -86,7 +92,7 @@ test("setting/deleting a property throws", () => {
 test("getOwnPropertyDescriptor points to the original object", () => {
   const pdesc1 = Object.getOwnPropertyDescriptor(firstUser, "name");
   const pdesc2 = Object.getOwnPropertyDescriptor(_(firstUser$), "name");
-  expect(pdesc1).toEqual(pdesc2);
+  expect(pdesc1).toEqual({ ...pdesc2, configurable: true });
 });
 
 test("'in' operator works (has)", () => {
@@ -145,4 +151,16 @@ test("actions work", () => {
   expect(firstUser.name).toBe("myname");
   expect(firstUser.active).toBe(false);
   expect(_(data$)).not.toBe(originalData);
+});
+
+test("getters should not be able to write (in dev mode)", () => {
+  if (devMode) {
+    const oldName = firstUser.name;
+    expect(() => {
+      // tslint:disable-next-line:no-unused-expression
+      firstUser.writeGetter;
+    }).toThrow("Cannot assign to read only property");
+    expect(_(firstUserName$)).toBe(oldName);
+    expect(firstUser.name).toBe(oldName);
+  }
 });
