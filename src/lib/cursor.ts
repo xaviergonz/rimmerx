@@ -1,9 +1,9 @@
-import { nothing, produce } from "immer";
+import { nothing, Patch, PatchListener, produce } from "immer";
 import { devMode } from "./devMode";
 import { freezeData } from "./utils";
 
 export interface CursorObject {
-  store: Store<any>;
+  store: StoreObject<any>;
   path: CursorStep[];
   parent?: CursorObject;
   proxy: any;
@@ -28,15 +28,17 @@ export class CursorCallStep {
   constructor(readonly ctx: any, readonly args: any) {}
 }
 
-interface StoreData<T> {
+export type Disposer = () => void;
+
+interface StoreObject<T> {
   store: T;
   draftStore?: T;
   updateCancelled: boolean;
   nofChanges: number;
-}
 
-interface Store<T> extends StoreData<T> {
-  subscribe(fn: () => void): Disposer;
+  subscribeToChanges(fn: () => void): Disposer;
+  subscribeToPatches(fn: PatchListener): Disposer;
+  emitPatches(patches: Patch[], inversePatches: Patch[]): void;
 }
 
 const cursorObject = Symbol("cursorObject");
@@ -62,13 +64,13 @@ function getCursorObject(cursor: any): CursorObject {
 }
 
 /**
- * Gets the root store of a given cursor.
+ * Gets the store object of a given cursor.
  *
  * @export
  * @param {*} cursor
  * @returns {*}
  */
-export function getStore<T = any>(cursor: any): Store<T> {
+function getStoreObject<T = any>(cursor: any): StoreObject<T> {
   return getCursorObject(cursor).store;
 }
 
@@ -184,7 +186,7 @@ function runCursor<T>(cursor: T, safeMode: boolean, draft: boolean): T | typeof 
 }
 
 function newCursorObject(
-  store: Store<any>,
+  store: StoreObject<any>,
   path: CursorStep[],
   parentCursorObject: CursorObject | undefined
 ): CursorObject {
@@ -278,20 +280,21 @@ const cursorProxyHandler: ProxyHandler<CursorObject> = {
 export function createStore<T>(data: T): T {
   let currentStoreRoot = freezeData(data);
   let nofChanges = 0;
-  const subscriptions: Set<() => void> = new Set();
+  const changeListeners: Set<() => void> = new Set();
+  const patchListeners: Set<PatchListener> = new Set();
 
-  const storeObject: Store<T> = {
+  const storeObject: StoreObject<T> = {
     get store() {
       return currentStoreRoot;
     },
-    set store(newStore: T) {
+    set store(newStore) {
       if (newStore === currentStoreRoot) {
         return;
       }
 
       nofChanges++;
       currentStoreRoot = freezeData(newStore);
-      subscriptions.forEach(s => s());
+      changeListeners.forEach(s => s());
     },
 
     draftStore: undefined,
@@ -301,11 +304,24 @@ export function createStore<T>(data: T): T {
       return nofChanges;
     },
 
-    subscribe(fn: () => void): Disposer {
-      subscriptions.add(fn);
+    subscribeToChanges(fn) {
+      changeListeners.add(fn);
       return () => {
-        subscriptions.delete(fn);
+        changeListeners.delete(fn);
       };
+    },
+
+    subscribeToPatches(fn) {
+      patchListeners.add(fn);
+      return () => {
+        patchListeners.delete(fn);
+      };
+    },
+
+    emitPatches(patches, inversePatches) {
+      patchListeners.forEach(l => {
+        l(patches, inversePatches);
+      });
     }
   };
 
@@ -411,14 +427,14 @@ export interface UpdateOperations {
  * @export
  * @template T
  * @param {T} cursor
- * @param {((draft: T) => T | void)} recipe
+ * @param {((draft: T, operations: UpdateOperations) => T | void)} recipe
  */
 export function update<T>(cursor: T, recipe: (draft: T, operations: UpdateOperations) => T | void): void {
   if (isFunctional(cursor)) {
     throw new Error("cannot update a functional cursor - does the cursor include a function call?");
   }
 
-  const storeObj = getStore(cursor);
+  const storeObj = getStoreObject(cursor);
 
   const operations: UpdateOperations = {
     cancel() {
@@ -429,7 +445,7 @@ export function update<T>(cursor: T, recipe: (draft: T, operations: UpdateOperat
   const updateDraftStore = () => {
     const draftTarget = runCursor(cursor, false, true) as T;
 
-    let newValue: any = recipe(draftTarget, operations);
+    let newValue = recipe(draftTarget, operations);
 
     // replace value in place case
     if (newValue !== undefined) {
@@ -452,10 +468,20 @@ export function update<T>(cursor: T, recipe: (draft: T, operations: UpdateOperat
   } else {
     const oldStoreRoot = storeObj.store;
     try {
-      const newStoreRoot = produce(oldStoreRoot, draftStoreRoot => {
-        storeObj.draftStore = draftStoreRoot;
-        updateDraftStore();
-      });
+      const emitPatchesIfNotCancelled: PatchListener = (patches, inversePatches) => {
+        if (!storeObj.updateCancelled) {
+          storeObj.emitPatches(patches, inversePatches);
+        }
+      };
+
+      const newStoreRoot = produce(
+        oldStoreRoot,
+        draftStoreRoot => {
+          storeObj.draftStore = draftStoreRoot;
+          updateDraftStore();
+        },
+        emitPatchesIfNotCancelled
+      );
 
       if (!storeObj.updateCancelled) {
         storeObj.store = newStoreRoot;
@@ -466,8 +492,6 @@ export function update<T>(cursor: T, recipe: (draft: T, operations: UpdateOperat
     }
   }
 }
-
-export type Disposer = () => void;
 
 /**
  * Run a callback whenver the value the cursor points to changes.
@@ -486,8 +510,8 @@ export function subscribeTo<T>(
 ): Disposer {
   let currentValue = _(cursor);
 
-  const store = getStore(cursor);
-  return store.subscribe(() => {
+  const store = getStoreObject(cursor);
+  return store.subscribeToChanges(() => {
     const oldValue = currentValue;
     const newValue = _(cursor);
     currentValue = newValue;
@@ -496,4 +520,24 @@ export function subscribeTo<T>(
       subscription(newValue, oldValue);
     }
   });
+}
+
+/**
+ * Run a callback whenever a store generates a set of patches / inverse patches as result of a change.
+ * Note that subscriptions can only be made over root cursors (the cursor returned as result of `createStore`).
+ * See `immer`'s `produce` method for details.
+ *
+ * @export
+ * @param {*} rootCursor
+ * @param {PatchListener} patchListener
+ * @returns {Disposer}
+ */
+export function subscribeToPatches(rootCursor: any, patchListener: PatchListener): Disposer {
+  const cursorObj = getCursorObject(rootCursor);
+  if (cursorObj.path.length !== 1) {
+    throw new Error("patch subscription can only be done on root cursors");
+  }
+
+  const store = getStoreObject(rootCursor);
+  return store.subscribeToPatches(patchListener);
 }

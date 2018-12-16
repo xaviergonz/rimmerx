@@ -1,4 +1,4 @@
-import { nothing } from "immer";
+import { nothing, PatchListener } from "immer";
 import {
   broken,
   createStore,
@@ -7,6 +7,7 @@ import {
   isFunctional,
   safeValueOf,
   subscribeTo,
+  subscribeToPatches,
   update,
   valueOf,
   _,
@@ -249,4 +250,35 @@ test("cancelled update", () => {
 
   expect(_(data$)).toBe(data);
   expect(calls).toBe(0);
+});
+
+test("subscribeToPatches", () => {
+  let calls = 0;
+  const listener: PatchListener = (patches, inversePatches) => {
+    calls++;
+    expect({ patches, inversePatches }).toMatchSnapshot();
+  };
+
+  expect(() => subscribeToPatches(firstUser$, listener)).toThrow("patch subscription can only be done on root cursors");
+
+  const disposer = subscribeToPatches(data$, listener);
+
+  expect(calls).toBe(0);
+
+  update(firstUser$, (u, opts) => {
+    opts.cancel();
+    u.name = "john";
+  });
+  expect(calls).toBe(0);
+
+  update(firstUser$, u => {
+    u.name = "john";
+  });
+  expect(calls).toBe(1);
+
+  disposer();
+  update(firstUser$, u => {
+    u.name = "james";
+  });
+  expect(calls).toBe(1);
 });
