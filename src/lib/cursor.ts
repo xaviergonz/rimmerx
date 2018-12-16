@@ -3,7 +3,7 @@ import { devMode } from "./devMode";
 import { freezeData } from "./utils";
 
 export interface CursorObject {
-  store: any;
+  store: Store<any>;
   path: CursorStep[];
   parent?: CursorObject;
   proxy: any;
@@ -30,7 +30,8 @@ export class CursorCallStep {
 
 interface StoreData<T> {
   store: T;
-  updating: boolean;
+  draftStore?: T;
+  updateCancelled: boolean;
   nofChanges: number;
 }
 
@@ -134,12 +135,11 @@ function stepCursor(cursor: any, step: CursorStep) {
   return newCursorObject(cursorObj.store, [...cursorObj.path, step], cursorObj);
 }
 
-function runCursor<T>(cursor: T, safeMode: boolean): T | typeof broken {
+function runCursor<T>(cursor: T, safeMode: boolean, draft: boolean): T | typeof broken {
   const cursorObj = getCursorObject(cursor);
-  const store: Store<any> = cursorObj.store;
-  const updating = store.updating;
+  const store = cursorObj.store;
 
-  if (!updating) {
+  if (!draft) {
     // value caching is not available while we are in the middle of an update
     // since values become mutable
     const oldMemoizedValue = safeMode ? cursorObj.safeMemoizedValue : cursorObj.memoizedValue;
@@ -150,7 +150,12 @@ function runCursor<T>(cursor: T, safeMode: boolean): T | typeof broken {
 
   let value: any = store;
 
-  for (const step of cursorObj.path) {
+  let index = 0;
+  for (let step of cursorObj.path) {
+    if (draft && index === 0) {
+      step = "draftStore";
+    }
+
     if (safeMode && (value === undefined || value === null)) {
       return broken;
     }
@@ -160,9 +165,10 @@ function runCursor<T>(cursor: T, safeMode: boolean): T | typeof broken {
     } else {
       value = value[step];
     }
+    index++;
   }
 
-  if (!updating) {
+  if (!draft) {
     const newMemoizedValue = {
       lastChange: store.nofChanges,
       result: value
@@ -177,7 +183,11 @@ function runCursor<T>(cursor: T, safeMode: boolean): T | typeof broken {
   return value;
 }
 
-function newCursorObject(store: any, path: CursorStep[], parentCursorObject: CursorObject | undefined): CursorObject {
+function newCursorObject(
+  store: Store<any>,
+  path: CursorStep[],
+  parentCursorObject: CursorObject | undefined
+): CursorObject {
   const lastStep = !parentCursorObject ? undefined : path[path.length - 1];
 
   // try the cache first
@@ -267,7 +277,6 @@ const cursorProxyHandler: ProxyHandler<CursorObject> = {
  */
 export function createStore<T>(data: T): T {
   let currentStoreRoot = freezeData(data);
-  let updateLock = false;
   let nofChanges = 0;
   const subscriptions: Set<() => void> = new Set();
 
@@ -280,21 +289,13 @@ export function createStore<T>(data: T): T {
         return;
       }
 
-      if (updateLock) {
-        currentStoreRoot = newStore;
-      } else {
-        nofChanges++;
-        currentStoreRoot = freezeData(newStore);
-        subscriptions.forEach(s => s());
-      }
+      nofChanges++;
+      currentStoreRoot = freezeData(newStore);
+      subscriptions.forEach(s => s());
     },
 
-    get updating() {
-      return updateLock;
-    },
-    set updating(val: boolean) {
-      updateLock = val;
-    },
+    draftStore: undefined,
+    updateCancelled: false,
 
     get nofChanges() {
       return nofChanges;
@@ -321,7 +322,7 @@ export function createStore<T>(data: T): T {
  * @returns {T}
  */
 export function _<T>(cursor: T): T {
-  return runCursor(cursor, false) as T;
+  return runCursor(cursor, false, false) as T;
 }
 
 /**
@@ -352,7 +353,7 @@ export const broken = Symbol("broken");
  * @returns {(T | typeof broken)}
  */
 export function _safe<T>(cursor: T): T | typeof broken {
-  return runCursor(cursor, true);
+  return runCursor(cursor, true, false);
 }
 
 /**
@@ -395,6 +396,10 @@ export function getParent<T = any>(cursor: any): T {
   return parent.proxy;
 }
 
+export interface UpdateOperations {
+  cancel(): void;
+}
+
 /**
  * Updates the value/values a cursor points to.
  * Like `immer`'s `produce` method:
@@ -408,15 +413,23 @@ export function getParent<T = any>(cursor: any): T {
  * @param {T} cursor
  * @param {((draft: T) => T | void)} recipe
  */
-export function update<T>(cursor: T, recipe: (draft: T) => T | void): void {
+export function update<T>(cursor: T, recipe: (draft: T, operations: UpdateOperations) => T | void): void {
   if (isFunctional(cursor)) {
     throw new Error("cannot update a functional cursor - does the cursor include a function call?");
   }
 
-  const updateDraftStore = () => {
-    const draftTarget = runCursor(cursor, false) as T;
+  const storeObj = getStore(cursor);
 
-    let newValue: any = recipe(draftTarget);
+  const operations: UpdateOperations = {
+    cancel() {
+      storeObj.updateCancelled = true;
+    }
+  };
+
+  const updateDraftStore = () => {
+    const draftTarget = runCursor(cursor, false, true) as T;
+
+    let newValue: any = recipe(draftTarget, operations);
 
     // replace value in place case
     if (newValue !== undefined) {
@@ -424,36 +437,32 @@ export function update<T>(cursor: T, recipe: (draft: T) => T | void): void {
         newValue = undefined;
       }
       const parentCursor = getParent(cursor);
-      const draftParentTarget = runCursor(parentCursor, false);
+      const draftParentTarget = runCursor(parentCursor, false, true);
       const path = getPath(cursor);
       const key = path[path.length - 1];
       draftParentTarget[key as any] = newValue;
     }
   };
 
-  const storeObj = getStore(cursor);
-
-  if (storeObj.updating) {
+  if (storeObj.draftStore) {
+    // TODO: choose which is the right approach
     // already updating, reuse the draft until finished
-    updateDraftStore();
+    // updateDraftStore();
+    throw new Error("nested updates are not allowed");
   } else {
     const oldStoreRoot = storeObj.store;
     try {
-      storeObj.updating = true;
       const newStoreRoot = produce(oldStoreRoot, draftStoreRoot => {
-        storeObj.store = draftStoreRoot;
+        storeObj.draftStore = draftStoreRoot;
         updateDraftStore();
       });
 
-      // we reset the old store so the store comparison works properly
-      storeObj.store = oldStoreRoot;
-      storeObj.updating = false;
-      storeObj.store = newStoreRoot;
-    } catch (e) {
-      // rollback on error
-      storeObj.store = oldStoreRoot;
-      storeObj.updating = false;
-      throw e;
+      if (!storeObj.updateCancelled) {
+        storeObj.store = newStoreRoot;
+      }
+    } finally {
+      storeObj.draftStore = undefined;
+      storeObj.updateCancelled = false;
     }
   }
 }

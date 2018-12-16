@@ -195,12 +195,12 @@ test("function cursor value caching", () => {
   expect(_(activeUsers$)).not.toBe(activeUsers1);
 });
 
-test("update with inner update", () => {
+test("nested updates", () => {
   let calls = 0;
   subscribeTo(firstUser$, (newVal, oldVal) => {
     calls++;
     expect(newVal).toEqual({
-      name: "first_updated",
+      name: "first_u1_u2",
       active: false
     });
     expect(oldVal).toEqual({
@@ -212,20 +212,41 @@ test("update with inner update", () => {
   expect(_(data$)).toBe(data);
 
   update(firstUser$, u => {
-    expect(_(activeUsers$).length).toBe(2);
-
     u.active = !u.active;
-    expect(_(activeUsers$).length).toBe(1);
-    expect(_(firstUser$).active).toBe(false);
+    expect(() => {
+      update(firstUserName$, name => name + "_u1");
+      update(firstUserName$, name => name + "_u2");
+    }).toThrow("nested updates are not allowed");
+    u.name += "_u1_u2";
 
-    update(firstUserName$, name => name + "_updated");
-    expect(_(firstUserName$)).toBe("first_updated");
+    // cursors still work as if the object was not mutated, since the commit is done after the update is finished
+    expect(_(activeUsers$).length).toBe(2);
+    expect(_(firstUser$).active).toBe(true);
+    expect(_(firstUserName$)).toBe("first");
   });
 
   expect(_(firstUser$)).toEqual({
-    name: "first_updated",
+    name: "first_u1_u2",
     active: false
   });
   expect(_(data$)).not.toBe(data);
   expect(calls).toBe(1);
+});
+
+test("cancelled update", () => {
+  let calls = 0;
+  subscribeTo(firstUser$, () => {
+    calls++;
+  });
+
+  expect(_(data$)).toBe(data);
+
+  update(firstUser$, (u, ops) => {
+    u.active = !u.active;
+    ops.cancel();
+    u.name = "another name";
+  });
+
+  expect(_(data$)).toBe(data);
+  expect(calls).toBe(0);
 });
