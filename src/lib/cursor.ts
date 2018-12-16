@@ -162,7 +162,7 @@ function runCursor<T>(cursor: T, safeMode: boolean, draft: boolean): T | typeof 
       return broken;
     }
     if (step instanceof CursorCallStep) {
-      const targetThis = isCursor(step.ctx) ? _(step.ctx) : step.ctx;
+      const targetThis = isCursor(step.ctx) ? runCursor(step.ctx, safeMode, draft) : step.ctx;
       value = value.apply(targetThis, step.args);
     } else {
       value = value[step];
@@ -232,7 +232,7 @@ const cursorProxyHandler: ProxyHandler<CursorObject> = {
     return false;
   },
   preventExtensions() {
-    return false;
+    return true;
   },
   getOwnPropertyDescriptor() {
     throw new Error("a cursor cannot be used to get a property descriptor");
@@ -430,10 +430,6 @@ export interface UpdateOperations {
  * @param {((draft: T, operations: UpdateOperations) => T | void)} recipe
  */
 export function update<T>(cursor: T, recipe: (draft: T, operations: UpdateOperations) => T | void): void {
-  if (isFunctional(cursor)) {
-    throw new Error("cannot update a functional cursor - does the cursor include a function call?");
-  }
-
   const storeObj = getStoreObject(cursor);
 
   const operations: UpdateOperations = {
@@ -467,13 +463,14 @@ export function update<T>(cursor: T, recipe: (draft: T, operations: UpdateOperat
     throw new Error("nested updates are not allowed");
   } else {
     const oldStoreRoot = storeObj.store;
-    try {
-      const emitPatchesIfNotCancelled: PatchListener = (patches, inversePatches) => {
-        if (!storeObj.updateCancelled) {
-          storeObj.emitPatches(patches, inversePatches);
-        }
-      };
 
+    const emitPatchesIfNotCancelled: PatchListener = (patches, inversePatches) => {
+      if (!storeObj.updateCancelled) {
+        storeObj.emitPatches(patches, inversePatches);
+      }
+    };
+
+    try {
       const newStoreRoot = produce(
         oldStoreRoot,
         draftStoreRoot => {

@@ -109,12 +109,14 @@ test("update - return nothing", () => {
   expect(_(data$)).not.toBe(data);
 });
 
-test("update - functional throws", () => {
-  expect(() =>
-    update(activeUsers$, () => {
-      // emtpy
-    })
-  ).toThrow("cannot update a functional cursor");
+test("update - functional works", () => {
+  const firstActiveUser$ = users$.find(u => u.active);
+  expect(_(data$)).toBe(data);
+  update(firstActiveUser$, u => {
+    u!.active = false;
+  });
+  expect(_(firstUser$).active).toBe(false);
+  expect(_(data$)).not.toBe(data);
 });
 
 test("subscription - values", () => {
