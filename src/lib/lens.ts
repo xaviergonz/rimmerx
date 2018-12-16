@@ -16,6 +16,11 @@ interface LensObject<T, LensDef> {
   cursor$: T;
   lensDefConstructor: LensDefConstructor<T, LensDef>;
   proxy: Lens<T, LensDef>;
+
+  memoizedLensDef?: {
+    data: T;
+    lensDef: any;
+  };
 }
 
 export function lens<T extends object, LensDef>(
@@ -63,7 +68,18 @@ const lensProxyHandler: ProxyHandler<LensObject<any, any>> = {
     }
 
     const data = _(targetLensObj.cursor$);
-    let lensDef = targetLensObj.lensDefConstructor(data);
+
+    // try to reused a previously generated lens definition
+    let lensDef;
+    if (targetLensObj.memoizedLensDef && targetLensObj.memoizedLensDef.data === data) {
+      lensDef = targetLensObj.memoizedLensDef.lensDef;
+    } else {
+      lensDef = targetLensObj.lensDefConstructor(data);
+      targetLensObj.memoizedLensDef = {
+        data,
+        lensDef
+      };
+    }
 
     const pdesc = Object.getOwnPropertyDescriptor(lensDef, key);
     if (pdesc) {
@@ -77,7 +93,7 @@ const lensProxyHandler: ProxyHandler<LensObject<any, any>> = {
           update(targetLensObj.cursor$, draftData => {
             lensDef = targetLensObj.lensDefConstructor(draftData);
             const action: (...args: any[]) => any = Reflect.get(lensDef, key);
-            retVal = action.apply(targetLensObj.proxy, args);
+            retVal = action.apply(lensDef, args);
           });
           return retVal;
         };
