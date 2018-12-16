@@ -182,3 +182,38 @@ test("function cursor value caching", () => {
   expect(_(activeUsers$)).toEqual(activeUsers1);
   expect(_(activeUsers$)).not.toBe(activeUsers1);
 });
+
+test("update with inner update", () => {
+  let calls = 0;
+  subscribe(firstUser$, (newVal, oldVal) => {
+    calls++;
+    expect(newVal).toEqual({
+      name: "first_updated",
+      active: false
+    });
+    expect(oldVal).toEqual({
+      name: "first",
+      active: true
+    });
+  });
+
+  expect(_(data$)).toBe(data);
+
+  update(firstUser$, u => {
+    expect(_(activeUsers$).length).toBe(2);
+
+    u.active = !u.active;
+    expect(_(activeUsers$).length).toBe(1);
+    expect(_(firstUser$).active).toBe(false);
+
+    update(firstUserName$, name => name + "_updated");
+    expect(_(firstUserName$)).toBe("first_updated");
+  });
+
+  expect(_(firstUser$)).toEqual({
+    name: "first_updated",
+    active: false
+  });
+  expect(_(data$)).not.toBe(data);
+  expect(calls).toBe(1);
+});

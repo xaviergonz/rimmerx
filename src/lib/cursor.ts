@@ -30,6 +30,7 @@ export class CursorCallStep {
 
 interface StoreData<T> {
   store: T;
+  updating: boolean;
   nofChanges: number;
 }
 
@@ -133,18 +134,14 @@ function stepCursor(cursor: any, step: CursorStep) {
   return newCursorObject(cursorObj.store, [...cursorObj.path, step], cursorObj);
 }
 
-function runCursor<T>(cursor: T, safeMode: boolean, alternateStore?: StoreData<any>): T | typeof broken {
-  if (devMode) {
-    const functional = isFunctional(cursor);
-    if (functional && alternateStore) {
-      throw new Error("functional cursors cannot run over alternate stores");
-    }
-  }
-
+function runCursor<T>(cursor: T, safeMode: boolean): T | typeof broken {
   const cursorObj = getCursorObject(cursor);
-  const store: Store<any> = alternateStore || cursorObj.store;
+  const store: Store<any> = cursorObj.store;
+  const updating = store.updating;
 
-  if (!alternateStore) {
+  if (!updating) {
+    // value caching is not available while we are in the middle of an update
+    // since values become mutable
     const oldMemoizedValue = safeMode ? cursorObj.safeMemoizedValue : cursorObj.memoizedValue;
     if (oldMemoizedValue && oldMemoizedValue.lastChange === store.nofChanges) {
       return oldMemoizedValue.result;
@@ -165,7 +162,7 @@ function runCursor<T>(cursor: T, safeMode: boolean, alternateStore?: StoreData<a
     }
   }
 
-  if (!alternateStore) {
+  if (!updating) {
     const newMemoizedValue = {
       lastChange: store.nofChanges,
       result: value
@@ -269,21 +266,34 @@ const cursorProxyHandler: ProxyHandler<CursorObject> = {
  * @returns {T}
  */
 export function createStore<T>(data: T): T {
-  let currentData = freezeData(data);
+  let currentStoreRoot = freezeData(data);
+  let updateLock = false;
   let nofChanges = 0;
   const subscriptions: Set<() => void> = new Set();
 
   const storeObject: Store<T> = {
     get store() {
-      return currentData;
+      return currentStoreRoot;
     },
     set store(newStore: T) {
-      if (newStore === currentData) {
+      if (newStore === currentStoreRoot) {
         return;
       }
-      currentData = freezeData(newStore);
-      nofChanges++;
-      subscriptions.forEach(s => s());
+
+      if (updateLock) {
+        currentStoreRoot = newStore;
+      } else {
+        nofChanges++;
+        currentStoreRoot = freezeData(newStore);
+        subscriptions.forEach(s => s());
+      }
+    },
+
+    get updating() {
+      return updateLock;
+    },
+    set updating(val: boolean) {
+      updateLock = val;
     },
 
     get nofChanges() {
@@ -368,14 +378,8 @@ export function update<T>(cursor: T, recipe: (draft: T) => T | void): void {
     throw new Error("cannot update a functional cursor - does the cursor include a function call?");
   }
 
-  const storeObj = getStore(cursor);
-  storeObj.store = produce(storeObj.store, draftStoreRoot => {
-    const draftStore: StoreData<any> = {
-      store: draftStoreRoot,
-      nofChanges: storeObj.nofChanges
-    };
-
-    const draftTarget = runCursor(cursor, false, draftStore) as T;
+  const updateDraftStore = () => {
+    const draftTarget = runCursor(cursor, false) as T;
 
     let newValue: any = recipe(draftTarget);
 
@@ -385,12 +389,38 @@ export function update<T>(cursor: T, recipe: (draft: T) => T | void): void {
         newValue = undefined;
       }
       const parentCursor = getParent(cursor);
-      const draftParentTarget = runCursor(parentCursor, false, draftStore);
+      const draftParentTarget = runCursor(parentCursor, false);
       const path = getPath(cursor);
       const key = path[path.length - 1];
       draftParentTarget[key as any] = newValue;
     }
-  });
+  };
+
+  const storeObj = getStore(cursor);
+
+  if (storeObj.updating) {
+    // already updating, reuse the draft until finished
+    updateDraftStore();
+  } else {
+    const oldStoreRoot = storeObj.store;
+    try {
+      storeObj.updating = true;
+      const newStoreRoot = produce(oldStoreRoot, draftStoreRoot => {
+        storeObj.store = draftStoreRoot;
+        updateDraftStore();
+      });
+
+      // we reset the old store so the store comparison works properly
+      storeObj.store = oldStoreRoot;
+      storeObj.updating = false;
+      storeObj.store = newStoreRoot;
+    } catch (e) {
+      // rollback on error
+      storeObj.store = oldStoreRoot;
+      storeObj.updating = false;
+      throw e;
+    }
+  }
 }
 
 export type Disposer = () => void;
