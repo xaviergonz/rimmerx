@@ -232,11 +232,8 @@ test("nested updates", () => {
 
   update(firstUser$, u => {
     u.active = !u.active;
-    expect(() => {
-      update(firstUserName$, name => name + "_u1");
-      update(firstUserName$, name => name + "_u2");
-    }).toThrow("nested updates are not allowed");
-    u.name += "_u1_u2";
+    update(firstUserName$, name => name + "_u1");
+    update(firstUserName$, name => name + "_u2");
 
     // cursors still work as if the object was not mutated, since the commit is done after the update is finished
     expect(_(activeUsers$).length).toBe(2);

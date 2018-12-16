@@ -460,10 +460,8 @@ export function update<T>(cursor: T, recipe: (draft: T, operations: UpdateOperat
   };
 
   if (storeObj.draftStore) {
-    // TODO: choose which is the right approach
     // already updating, reuse the draft until finished
-    // updateDraftStore();
-    throw new Error("nested updates are not allowed");
+    updateDraftStore();
   } else {
     const oldStoreRoot = storeObj.store;
 

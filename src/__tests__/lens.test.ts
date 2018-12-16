@@ -18,13 +18,21 @@ const userLens = lens((user: User) => ({
   },
 
   setNameAndActive(val: string, active: boolean): string {
+    // make sure this can be used over getters
+    expect(this.stringData).toBeTruthy();
+
     user.name = val;
-    user.active = active;
+    // make sure actions work
+    this.setActive(active);
 
     expect(user.name).toBe(val);
     expect(user.active).toBe(active);
 
     return val;
+  },
+
+  setActive(val: boolean) {
+    user.active = val;
   }
 
   // TODO: async?
