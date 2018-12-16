@@ -314,6 +314,7 @@ export function createStore<T>(data: T): T {
 /**
  * Executes a cursor query, returning its result.
  *
+ * @alias valueOf
  * @export
  * @template T
  * @param {T} cursor
@@ -323,11 +324,28 @@ export function _<T>(cursor: T): T {
   return runCursor(cursor, false) as T;
 }
 
+/**
+ * Executes a cursor query, returning its result.
+ *
+ * @alias _
+ * @export
+ * @template T
+ * @param {T} cursor
+ * @returns {T}
+ */
+export function valueOf<T>(cursor: T): T {
+  return _(cursor);
+}
+
+/**
+ * Indicates that a cursor value could not be calculated since the selector is broken.
+ */
 export const broken = Symbol("broken");
 
 /**
- * Executes a cursor query, returning its result, or broken if at some part of the evalution the value in the middle is undefined/null.
+ * Executes a cursor query, returning its result, or `broken` if at some part of the evalution the value in the middle is `undefined` or `null`.
  *
+ * @alias safeValueOf
  * @export
  * @template T
  * @param {T} cursor
@@ -335,6 +353,19 @@ export const broken = Symbol("broken");
  */
 export function _safe<T>(cursor: T): T | typeof broken {
   return runCursor(cursor, true);
+}
+
+/**
+ * Executes a cursor query, returning its result, or `broken` if at some part of the evalution the value in the middle is `undefined` or `null`.
+ *
+ * @alias _safe
+ * @export
+ * @template T
+ * @param {T} cursor
+ * @returns {(T | typeof broken)}
+ */
+export function safeValueOf<T>(cursor: T): T | typeof broken {
+  return _safe(cursor);
 }
 
 /**
@@ -366,7 +397,11 @@ export function getParent<T = any>(cursor: any): T {
 
 /**
  * Updates the value/values a cursor points to.
- * See `immer`'s `produce` method.
+ * Like `immer`'s `produce` method:
+ * - to modify an object either:
+ *   - do mutable operations over the object
+ *   - or return the new value (remember that `nothing` must be returned if the new value should be `undefined`)
+ * See `immer` docs for more info.
  *
  * @export
  * @template T
@@ -425,7 +460,18 @@ export function update<T>(cursor: T, recipe: (draft: T) => T | void): void {
 
 export type Disposer = () => void;
 
-export function subscribe<T>(
+/**
+ * Run a callback whenver the value the cursor points to changes.
+ * If the cursor eventually becomes broken, then the `broken` symbol will be passed as new/old value.
+ * Returns a disposer for disposal.
+ *
+ * @export
+ * @template T
+ * @param {T} cursor
+ * @param {((newValue: T | typeof broken, oldValue: T | typeof broken) => void)} subscription
+ * @returns {Disposer}
+ */
+export function subscribeTo<T>(
   cursor: T,
   subscription: (newValue: T | typeof broken, oldValue: T | typeof broken) => void
 ): Disposer {

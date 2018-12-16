@@ -1,5 +1,17 @@
 import { nothing } from "immer";
-import { broken, createStore, cursorToString, getParent, isFunctional, subscribe, update, _, _safe } from "..";
+import {
+  broken,
+  createStore,
+  cursorToString,
+  getParent,
+  isFunctional,
+  safeValueOf,
+  subscribeTo,
+  update,
+  valueOf,
+  _,
+  _safe
+} from "..";
 
 const originalData = {
   users: [{ name: "first", active: true }, { name: "second", active: false }, { name: "third", active: true }]
@@ -34,7 +46,7 @@ test("cursorToString", () => {
 test("reading values", () => {
   expect(_(data$)).toBe(data);
   expect(_(users$)).toBe(data.users);
-  expect(_(firstUser$)).toEqual(data.users[0]);
+  expect(valueOf(firstUser$)).toEqual(data.users[0]);
   expect(_(firstUserName$)).toBe(data.users[0].name);
   expect(_(activeUsers$)).toEqual(["first", "third"]);
   expect(() => _(broken$)).toThrow("Cannot read property '0' of undefined");
@@ -44,7 +56,7 @@ test("reading values", () => {
 });
 
 test("reading values in a safe way", () => {
-  expect(_safe(data$)).toBe(data);
+  expect(safeValueOf(data$)).toBe(data);
   expect(_safe(broken$)).toBe(broken);
 });
 
@@ -106,7 +118,7 @@ test("update - functional throws", () => {
 
 test("subscription - values", () => {
   let calls = 0;
-  const disposer = subscribe(firstUserName$, (newVal, oldVal) => {
+  const disposer = subscribeTo(firstUserName$, (newVal, oldVal) => {
     calls++;
     expect(newVal).toBe("first_updated");
     expect(oldVal).toBe("first");
@@ -134,7 +146,7 @@ test("subscription - values", () => {
 
 test("subscription - functions", () => {
   let calls = 0;
-  const disposer = subscribe(activeUsers$, (newVal, oldVal) => {
+  const disposer = subscribeTo(activeUsers$, (newVal, oldVal) => {
     calls++;
     expect(newVal).toEqual(["third"]);
     expect(oldVal).toEqual(["first", "third"]);
@@ -185,7 +197,7 @@ test("function cursor value caching", () => {
 
 test("update with inner update", () => {
   let calls = 0;
-  subscribe(firstUser$, (newVal, oldVal) => {
+  subscribeTo(firstUser$, (newVal, oldVal) => {
     calls++;
     expect(newVal).toEqual({
       name: "first_updated",
