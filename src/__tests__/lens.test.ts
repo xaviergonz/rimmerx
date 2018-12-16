@@ -7,7 +7,7 @@ interface User {
   active: boolean;
 }
 
-const userLens = lens((user: User) => ({
+const $User = lens((user: User) => ({
   get stringData() {
     return user.active ? `${user.name} (active)` : `${user.name} (inactive)`;
   },
@@ -55,37 +55,37 @@ const originalData = {
 };
 
 let data = originalData;
-let data$ = createStore(data);
-let users$ = data$.users;
-let firstUser$ = users$[0];
-let firstUserName$ = firstUser$.name;
-// let activeUsers$ = data$.users.filter(u => u.active).map(u => u.name);
-// let broken$ = (data$ as any).doesntExist[0];
-let firstUser = userLens(firstUser$);
+let $data = createStore(data);
+let $users = $data.users;
+let $firstUser = $users[0];
+let $firstUserName = $firstUser.name;
+// let $activeUsers = $data.users.filter(u => u.active).map(u => u.name);
+// let $broken = ($data as any).doesntExist[0];
+let firstUser = $User($firstUser);
 // let users = usersLens(users$);
 
 beforeEach(() => {
   data = originalData;
-  data$ = createStore(data);
-  users$ = data$.users;
-  firstUser$ = users$[0];
-  firstUserName$ = firstUser$.name;
-  // activeUsers$ = activeUsers$ = data$.users.filter(u => u.active).map(u => u.name);
-  // broken$ = (data$ as any).doesntExist[0];
-  firstUser = userLens(firstUser$);
+  $data = createStore(data);
+  $users = $data.users;
+  $firstUser = $users[0];
+  $firstUserName = $firstUser.name;
+  // $activeUsers = $activeUsers = data$.users.filter(u => u.active).map(u => u.name);
+  // $broken = ($data as any).doesntExist[0];
+  firstUser = $User($firstUser);
   // users = usersLens(users$);
 });
 
 test("reading property", () => {
-  expect(firstUser.name).toBe(_(firstUser$).name);
+  expect(firstUser.name).toBe(_($firstUser).name);
 });
 
 test("getting original object", () => {
-  expect(firstUser._).toBe(_(firstUser$));
+  expect(firstUser._).toBe(_($firstUser));
 });
 
 test("getting original cursor", () => {
-  expect(firstUser.$).toBe(firstUser$);
+  expect(firstUser.$).toBe($firstUser);
 });
 
 test("setting/deleting a property throws", () => {
@@ -99,7 +99,7 @@ test("setting/deleting a property throws", () => {
 
 test("getOwnPropertyDescriptor points to the original object", () => {
   const pdesc1 = Object.getOwnPropertyDescriptor(firstUser, "name");
-  const pdesc2 = Object.getOwnPropertyDescriptor(_(firstUser$), "name");
+  const pdesc2 = Object.getOwnPropertyDescriptor(_($firstUser), "name");
   expect(pdesc1).toEqual({ ...pdesc2, configurable: true });
 });
 
@@ -136,7 +136,7 @@ test("getters work", () => {
 
 test("actions work", () => {
   let calls = 0;
-  subscribeTo(firstUser$, (newVal, oldVal) => {
+  subscribeTo($firstUser, (newVal, oldVal) => {
     calls++;
     expect(oldVal).toEqual({
       name: "first",
@@ -150,7 +150,7 @@ test("actions work", () => {
 
   expect(firstUser.name).toBe("first");
   expect(firstUser.active).toBe(true);
-  expect(_(data$)).toBe(originalData);
+  expect(_($data)).toBe(originalData);
 
   const ret = firstUser.setNameAndActive("myname", false);
 
@@ -158,7 +158,7 @@ test("actions work", () => {
   expect(calls).toBe(1);
   expect(firstUser.name).toBe("myname");
   expect(firstUser.active).toBe(false);
-  expect(_(data$)).not.toBe(originalData);
+  expect(_($data)).not.toBe(originalData);
 });
 
 test("getters should not be able to write (in dev mode)", () => {
@@ -168,14 +168,14 @@ test("getters should not be able to write (in dev mode)", () => {
       // tslint:disable-next-line:no-unused-expression
       firstUser.writeGetter;
     }).toThrow("Cannot assign to read only property");
-    expect(_(firstUserName$)).toBe(oldName);
+    expect(_($firstUserName)).toBe(oldName);
     expect(firstUser.name).toBe(oldName);
   }
 });
 
 test("lenses of the same kind pointing to the same cursor should be the same", () => {
-  const firstUser2 = userLens(users$[0]);
-  const secondUser = userLens(users$[1]);
+  const firstUser2 = $User($users[0]);
+  const secondUser = $User($users[1]);
   expect(firstUser === firstUser2).toBe(true);
   expect(firstUser === secondUser).toBe(false);
 });
