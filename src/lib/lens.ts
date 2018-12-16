@@ -26,13 +26,22 @@ interface LensObject<T, LensDef> {
 export function lens<T extends object, LensDef>(
   lensDefConstructor: LensDefConstructor<T, LensDef>
 ): LensConstructor<T, LensDef> {
+  const cachedLenses = new WeakMap<any, LensObject<T, LensDef>>();
+
   return cursor => {
-    const lensObj: LensObject<T, LensDef> = {
+    let lensObj: LensObject<T, LensDef> | undefined = cachedLenses.get(cursor);
+    if (lensObj) {
+      return lensObj.proxy;
+    }
+
+    lensObj = {
       cursor$: cursor,
       lensDefConstructor,
       proxy: undefined as any
     };
     lensObj.proxy = new Proxy(lensObj, lensProxyHandler) as any;
+
+    cachedLenses.set(cursor, lensObj);
 
     return lensObj.proxy;
   };

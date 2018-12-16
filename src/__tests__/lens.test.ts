@@ -172,3 +172,10 @@ test("getters should not be able to write (in dev mode)", () => {
     expect(firstUser.name).toBe(oldName);
   }
 });
+
+test("lenses of the same kind pointing to the same cursor should be the same", () => {
+  const firstUser2 = userLens(users$[0]);
+  const secondUser = userLens(users$[1]);
+  expect(firstUser === firstUser2).toBe(true);
+  expect(firstUser === secondUser).toBe(false);
+});
