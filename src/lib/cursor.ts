@@ -1,6 +1,7 @@
 import { nothing, Patch, PatchListener, produce } from "immer";
 import { devMode } from "./devMode";
 import { freezeData } from "./utils";
+export { nothing, Patch, PatchListener } from "immer";
 
 export interface CursorObject {
   store: StoreObject<any>;
@@ -331,7 +332,7 @@ export function createStore<T>(data: T): T {
 /**
  * Executes a cursor query, returning its result.
  *
- * @alias valueOf
+ * @alias get
  * @export
  * @template T
  * @param {T} cursor
@@ -350,7 +351,7 @@ export function _<T>(cursor: T): T {
  * @param {T} cursor
  * @returns {T}
  */
-export function valueOf<T>(cursor: T): T {
+export function get<T>(cursor: T): T {
   return _(cursor);
 }
 
@@ -362,7 +363,7 @@ export const broken = Symbol("broken");
 /**
  * Executes a cursor query, returning its result, or `broken` if at some part of the evalution the value in the middle is `undefined` or `null`.
  *
- * @alias safeValueOf
+ * @alias safeGet
  * @export
  * @template T
  * @param {T} cursor
@@ -381,7 +382,7 @@ export function _safe<T>(cursor: T): T | typeof broken {
  * @param {T} cursor
  * @returns {(T | typeof broken)}
  */
-export function safeValueOf<T>(cursor: T): T | typeof broken {
+export function safeGet<T>(cursor: T): T | typeof broken {
   return _safe(cursor);
 }
 
@@ -418,10 +419,12 @@ export interface UpdateOperations {
 
 /**
  * Updates the value/values a cursor points to.
- * Like `immer`'s `produce` method:
+ *
+ * Similar to `immer`'s `produce` method:
  * - to modify an object either:
  *   - do mutable operations over the object
- *   - or return the new value (remember that `nothing` must be returned if the new value should be `undefined`)
+ *   - or return the new value (remember that `nothing` must be returned if the new value should be `undefined`),
+ *     but in this cases it is usally easier just to use the `set` function.
  * See `immer` docs for more info.
  *
  * @export
@@ -488,6 +491,19 @@ export function update<T>(cursor: T, recipe: (draft: T, operations: UpdateOperat
       storeObj.updateCancelled = false;
     }
   }
+}
+
+/**
+ * Sets the cursor target to a given value.
+ * Simplified version of `update`.
+ *
+ * @export
+ * @template T
+ * @param {T} cursor
+ * @param {T} value
+ */
+export function set<T, TVal extends T>(cursor: T, value: TVal): void {
+  update(cursor, () => (value === undefined ? nothing : value));
 }
 
 /**

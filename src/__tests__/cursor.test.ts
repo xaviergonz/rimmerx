@@ -1,15 +1,17 @@
-import { nothing, PatchListener } from "immer";
 import {
   broken,
   createStore,
   cursorToString,
+  get,
   getParent,
   isFunctional,
-  safeValueOf,
+  nothing,
+  PatchListener,
+  safeGet,
+  set,
   subscribeTo,
   subscribeToPatches,
   update,
-  valueOf,
   _,
   _safe
 } from "..";
@@ -47,7 +49,7 @@ test("cursorToString", () => {
 test("reading values", () => {
   expect(_(data$)).toBe(data);
   expect(_(users$)).toBe(data.users);
-  expect(valueOf(firstUser$)).toEqual(data.users[0]);
+  expect(get(firstUser$)).toEqual(data.users[0]);
   expect(_(firstUserName$)).toBe(data.users[0].name);
   expect(_(activeUsers$)).toEqual(["first", "third"]);
   expect(() => _(broken$)).toThrow("Cannot read property '0' of undefined");
@@ -57,7 +59,7 @@ test("reading values", () => {
 });
 
 test("reading values in a safe way", () => {
-  expect(safeValueOf(data$)).toBe(data);
+  expect(safeGet(data$)).toBe(data);
   expect(_safe(broken$)).toBe(broken);
 });
 
@@ -145,6 +147,20 @@ test("subscription - values", () => {
     return name + "_updated";
   });
   expect(calls).toBe(1);
+});
+
+test("set - direct", () => {
+  expect(_(data$)).toBe(data);
+  set(firstUserName$, "some name");
+  expect(_(firstUserName$)).toBe("some name");
+  expect(_(data$)).not.toBe(data);
+});
+
+test("set - indirect to undefined", () => {
+  expect(_(data$)).toBe(data);
+  set(firstUser$.name, undefined as any);
+  expect(_(firstUser$.name)).toBe(undefined);
+  expect(_(data$)).not.toBe(data);
 });
 
 test("subscription - functions", () => {
