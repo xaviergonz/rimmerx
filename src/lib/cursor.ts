@@ -248,7 +248,7 @@ const cursorProxyHandler: ProxyHandler<CursorObject> = {
     return stepCursor(targetCursorObj.proxy, key).proxy;
   },
   set() {
-    throw new Error("a cursor cannot be used to set a value");
+    throw new Error("a cursor cannot be used to set a property");
   },
   deleteProperty() {
     throw new Error("a cursor cannot be used to delete a property");
