@@ -8,3 +8,6 @@ TODO:
 - support subscribeToPatches for non root cursors?
 - cancel inside actions?
 - cache lens getters?
+- subscribe for lenses? (would be the same as subscribing for its inner cursor actually)
+
+- instead of lens.\_ .\$ use getCursor(lens), getData(lens) ?

@@ -7,36 +7,46 @@ interface User {
   active: boolean;
 }
 
-const $User = lens((user: User) => ({
-  get stringData() {
-    return user.active ? `${user.name} (active)` : `${user.name} (inactive)`;
-  },
+const $User = lens((user: User) => {
+  const views = {
+    get stringData() {
+      return user.active ? `${user.name} (active)` : `${user.name} (inactive)`;
+    },
 
-  get writeGetter() {
-    user.name = "write";
-    return "write";
-  },
+    get writeGetter() {
+      user.name = "write";
+      return "write";
+    },
 
-  setNameAndActive(val: string, active: boolean): string {
-    // make sure this can be used over getters
-    expect(this.stringData).toBeTruthy();
+    viewWithParams(v: string) {
+      return user.name + v;
+    }
+  };
 
-    user.name = val;
-    // make sure actions work
-    this.setActive(active);
+  const actions = {
+    setNameAndActive(val: string, active: boolean): string {
+      // make sure views work inside actions
+      expect(views.stringData).toBeTruthy();
 
-    expect(user.name).toBe(val);
-    expect(user.active).toBe(active);
+      user.name = val;
+      // make sure actions work
+      this.setActive(active);
 
-    return val;
-  },
+      expect(user.name).toBe(val);
+      expect(user.active).toBe(active);
 
-  setActive(val: boolean) {
-    user.active = val;
-  }
+      return val;
+    },
 
-  // TODO: async?
-}));
+    setActive(val: boolean) {
+      user.active = val;
+    }
+
+    // TODO: async?
+  };
+
+  return { views, actions };
+});
 
 // const usersLens = lens((userArr: User[]) => ({
 //   get names() {
@@ -132,6 +142,7 @@ test("for...in works (enumerate)", () => {
 
 test("getters work", () => {
   expect(firstUser.stringData).toBe("first (active)");
+  expect(firstUser.viewWithParams("hi")).toBe("firsthi");
 });
 
 test("actions work", () => {

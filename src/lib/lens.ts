@@ -1,35 +1,41 @@
 import { update, _ } from "./cursor";
 
-export type Lens<T, LensDef> = T &
-  LensDef & {
+export type Lens<T, V, A> = T &
+  V &
+  A & {
     readonly _: T; // orginal resolved value
     readonly $: T; // wrapped cursor
   };
 
-export type LensConstructor<T, LensDef> = (cursor: T) => Lens<T, LensDef>;
+export type LensConstructor<T, V, A> = (cursor: T) => Lens<T, V, A>;
 
-export type LensDefConstructor<T, LensDef> = (data: T) => LensDef;
+export interface LensDef<V, A> {
+  views?: V;
+  actions?: A;
+}
+
+export type LensDefConstructor<T, V, A> = (data: T) => LensDef<V, A>;
 
 const lensObject = Symbol("lensObject");
 
-interface LensObject<T, LensDef> {
+interface LensObject<T, V, A> {
   cursor$: T;
-  lensDefConstructor: LensDefConstructor<T, LensDef>;
-  proxy: Lens<T, LensDef>;
+  lensDefConstructor: LensDefConstructor<T, V, A>;
+  proxy: Lens<T, V, A>;
 
   memoizedLensDef?: {
     data: T;
-    lensDef: any;
+    lensDef: LensDef<V, A>;
   };
 }
 
-export function lens<T extends object, LensDef>(
-  lensDefConstructor: LensDefConstructor<T, LensDef>
-): LensConstructor<T, LensDef> {
-  const cachedLenses = new WeakMap<any, LensObject<T, LensDef>>();
+export function lens<T extends object, V, A>(
+  lensDefConstructor: LensDefConstructor<T, V, A>
+): LensConstructor<T, V, A> {
+  const cachedLenses = new WeakMap<any, LensObject<T, V, A>>();
 
   return cursor => {
-    let lensObj: LensObject<T, LensDef> | undefined = cachedLenses.get(cursor);
+    let lensObj: LensObject<T, V, A> | undefined = cachedLenses.get(cursor);
     if (lensObj) {
       return lensObj.proxy;
     }
@@ -47,7 +53,7 @@ export function lens<T extends object, LensDef>(
   };
 }
 
-const lensProxyHandler: ProxyHandler<LensObject<any, any>> = {
+const lensProxyHandler: ProxyHandler<LensObject<any, any, any>> = {
   // getPrototypeOf: let it go for instanceof checks
   setPrototypeOf() {
     throw new Error("a lens cannot be used to set a prototype");
@@ -79,7 +85,7 @@ const lensProxyHandler: ProxyHandler<LensObject<any, any>> = {
     const data = _(targetLensObj.cursor$);
 
     // try to reused a previously generated lens definition
-    let lensDef;
+    let lensDef: LensDef<any, any>;
     if (targetLensObj.memoizedLensDef && targetLensObj.memoizedLensDef.data === data) {
       lensDef = targetLensObj.memoizedLensDef.lensDef;
     } else {
@@ -90,26 +96,21 @@ const lensProxyHandler: ProxyHandler<LensObject<any, any>> = {
       };
     }
 
-    const pdesc = Object.getOwnPropertyDescriptor(lensDef, key);
-    if (pdesc) {
-      if (pdesc.get) {
-        // a property
-        return Reflect.get(lensDef, key);
-      } else {
-        // an action
-        return (...args: any[]) => {
-          let retVal;
-          update(targetLensObj.cursor$, draftData => {
-            lensDef = targetLensObj.lensDefConstructor(draftData);
-            const action: (...args: any[]) => any = Reflect.get(lensDef, key);
-            retVal = action.apply(lensDef, args);
-          });
-          return retVal;
-        };
-      }
+    if (lensDef.views && key in lensDef.views) {
+      return Reflect.get(lensDef.views, key);
+    } else if (lensDef.actions && key in lensDef.actions) {
+      return (...args: any[]) => {
+        let retVal;
+        update(targetLensObj.cursor$, draftData => {
+          lensDef = targetLensObj.lensDefConstructor(draftData);
+          const action: (...args: any[]) => any = Reflect.get(lensDef.actions, key);
+          retVal = action.apply(lensDef.actions, args);
+        });
+        return retVal;
+      };
+    } else {
+      return Reflect.get(data, key);
     }
-
-    return Reflect.get(data, key);
   },
   set() {
     throw new Error("a lens cannot be used to set a property");
