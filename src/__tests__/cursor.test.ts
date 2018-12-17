@@ -7,6 +7,7 @@ import {
   isFunctional,
   nothing,
   PatchListener,
+  rollbackUpdate,
   safeGet,
   set,
   subscribeTo,
@@ -15,7 +16,6 @@ import {
   _,
   _safe
 } from "..";
-import { rollbackUpdate } from "../lib/rollbackUpdate";
 
 const originalData = {
   users: [{ name: "first", active: true }, { name: "second", active: false }, { name: "third", active: true }]
