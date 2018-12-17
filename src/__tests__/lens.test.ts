@@ -7,10 +7,14 @@ interface User {
   active: boolean;
 }
 
+function userToString(user: User) {
+  return user.active ? `${user.name} (active)` : `${user.name} (inactive)`;
+}
+
 const $User = lens((user: User) => {
   const views = {
     get stringData() {
-      return user.active ? `${user.name} (active)` : `${user.name} (inactive)`;
+      return userToString(user);
     },
 
     get writeGetter() {
@@ -32,8 +36,10 @@ const $User = lens((user: User) => {
       // make sure actions work
       this.setActive(active);
 
+      // make sure props and views are up to date with temp changes
       expect(user.name).toBe(val);
       expect(user.active).toBe(active);
+      expect(views.stringData).toBe(userToString({ name: val, active }));
 
       return val;
     },
