@@ -1,5 +1,6 @@
 import { nothing, Patch, PatchListener, produce } from "immer";
 import { devMode } from "./devMode";
+import { isRollbackUpdate } from "./rollbackUpdate";
 import { freezeData } from "./utils";
 export { nothing, Patch, PatchListener } from "immer";
 
@@ -413,10 +414,6 @@ export function getParent<T = any>(cursor: any): T {
   return parent.proxy;
 }
 
-export interface UpdateOperations {
-  cancel(): void;
-}
-
 /**
  * Updates the value/values a cursor points to.
  *
@@ -427,35 +424,41 @@ export interface UpdateOperations {
  *     but in this cases it is usally easier just to use the `set` function.
  * See `immer` docs for more info.
  *
+ * If any error is thrown in the middle of an update process then the update
+ * will be cancelled and therefore not changes won't be commited.
+ *
+ * If you want to rollback without actually generating an error then use `throw rollbackUpdate`.
+ *
  * @export
  * @template T
  * @param {T} cursor
- * @param {((draft: T, operations: UpdateOperations) => T | void)} recipe
+ * @param {((draft: T) => T | void)} recipe
  */
-export function update<T>(cursor: T, recipe: (draft: T, operations: UpdateOperations) => T | void): void {
+export function update<T>(cursor: T, recipe: (draft: T) => T | void): void {
   const storeObj = getStoreObject(cursor);
 
-  const operations: UpdateOperations = {
-    cancel() {
-      storeObj.updateCancelled = true;
-    }
-  };
-
   const updateDraftStore = () => {
-    const draftTarget = runCursor(cursor, false, true) as T;
+    try {
+      const draftTarget = runCursor(cursor, false, true) as T;
 
-    let newValue = recipe(draftTarget, operations);
+      let newValue = recipe(draftTarget);
 
-    // replace value in place case
-    if (newValue !== undefined) {
-      if (newValue === nothing) {
-        newValue = undefined;
+      // replace value in place case
+      if (newValue !== undefined) {
+        if (newValue === nothing) {
+          newValue = undefined;
+        }
+        const parentCursor = getParent(cursor);
+        const draftParentTarget = runCursor(parentCursor, false, true);
+        const path = getPath(cursor);
+        const key = path[path.length - 1];
+        draftParentTarget[key as any] = newValue;
       }
-      const parentCursor = getParent(cursor);
-      const draftParentTarget = runCursor(parentCursor, false, true);
-      const path = getPath(cursor);
-      const key = path[path.length - 1];
-      draftParentTarget[key as any] = newValue;
+    } catch (err) {
+      storeObj.updateCancelled = true;
+      if (!isRollbackUpdate(err)) {
+        throw err;
+      }
     }
   };
 

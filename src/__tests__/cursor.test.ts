@@ -15,6 +15,7 @@ import {
   _,
   _safe
 } from "..";
+import { rollbackUpdate } from "../lib/rollbackUpdate";
 
 const originalData = {
   users: [{ name: "first", active: true }, { name: "second", active: false }, { name: "third", active: true }]
@@ -257,12 +258,22 @@ test("cancelled update", () => {
 
   expect(_($data)).toBe(data);
 
-  update($firstUser, (u, ops) => {
+  update($firstUser, u => {
     u.active = !u.active;
-    ops.cancel();
     u.name = "another name";
+    throw rollbackUpdate;
   });
+  expect(_($data)).toBe(data);
+  expect(calls).toBe(0);
 
+  // rollback upon exception being thrown
+  expect(() => {
+    update($firstUser, u => {
+      u.active = !u.active;
+      u.name = "another name";
+      throw new Error("some error");
+    });
+  }).toThrow("some error");
   expect(_($data)).toBe(data);
   expect(calls).toBe(0);
 });
@@ -280,9 +291,9 @@ test("subscribeToPatches", () => {
 
   expect(calls).toBe(0);
 
-  update($firstUser, (u, opts) => {
-    opts.cancel();
-    u.name = "john";
+  update($firstUser, u => {
+    u.name = "james";
+    throw rollbackUpdate;
   });
   expect(calls).toBe(0);
 
