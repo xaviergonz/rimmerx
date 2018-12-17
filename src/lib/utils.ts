@@ -1,5 +1,7 @@
 import { devMode } from "./devMode";
 
+export type Disposer = () => void;
+
 /**
  * @internal
  * @private

@@ -1,5 +1,9 @@
 import { update, _ } from "./cursor";
+import { devMode } from "./devMode";
 
+/**
+ * An instantiated lens.
+ */
 export type Lens<T, V, A> = T &
   V &
   A & {
@@ -7,17 +11,32 @@ export type Lens<T, V, A> = T &
     readonly $: T; // wrapped cursor
   };
 
+/**
+ * A lens instance constructor.
+ */
 export type LensConstructor<T, V, A> = (cursor: T) => Lens<T, V, A>;
 
+/**
+ * A lens definition object.
+ */
 export interface LensDef<V, A> {
   views?: V;
   actions?: A;
 }
 
+/**
+ * A constructor for lens definitions.
+ */
 export type LensDefConstructor<T, V, A> = (data: T) => LensDef<V, A>;
 
+/**
+ * A symbol used to access the lens administration object.
+ */
 const lensObject = Symbol("lensObject");
 
+/**
+ * A lens administration object.
+ */
 interface LensObject<T, V, A> {
   cursor$: T;
   lensDefConstructor: LensDefConstructor<T, V, A>;
@@ -29,6 +48,76 @@ interface LensObject<T, V, A> {
   };
 }
 
+/**
+ * Ensures that a value is a lens instance. Throws otherwise.
+ *
+ * @param {*} lensInstance
+ */
+function ensureIsLens(lensInstance: any) {
+  if (devMode) {
+    if (!isLens(lensInstance)) {
+      throw new Error("invalid lens");
+    }
+  }
+}
+
+/**
+ * Gets the adiministration object of a lens instance.
+ *
+ * @param {*} lensInstance
+ * @returns {LensObject<any, any, any>}
+ */
+function getLensObject(lensInstance: any): LensObject<any, any, any> {
+  ensureIsLens(lensInstance);
+  return lensInstance[lensObject];
+}
+
+/**
+ * Returns if a value is a lens.
+ *
+ * @export
+ * @param {*} lensInstance
+ * @returns {boolean} true if the value is a lens.
+ */
+export function isLens(lensInstance: any): lensInstance is Lens<any, any, any> {
+  return typeof lens === "function" && !!lensInstance[lensObject];
+}
+
+/**
+ * Returns the cursor a lens instance is using internally.
+ *
+ * @export
+ * @template T
+ * @param {T} lensInstance
+ * @returns {T}
+ */
+export function getLensCursor<T>(lensInstance: Lens<T, any, any>): T {
+  return getLensObject(lensInstance).cursor$;
+}
+
+/**
+ * Gets the data a lens instance is pointing to through its cursor.
+ *
+ * @export
+ * @template T
+ * @param {Lens<T, any, any>} lensInstance
+ * @returns {T}
+ */
+export function getLensData<T>(lensInstance: Lens<T, any, any>): T {
+  return _(getLensCursor(lensInstance));
+}
+
+/**
+ * Given a lens definition it generates a function (lens) that can be applied
+ * over cursors to read/manipulate its value in an easier way.
+ *
+ * @export
+ * @template T
+ * @template V
+ * @template A
+ * @param {LensDefConstructor<T, V, A>} lensDefConstructor
+ * @returns {LensConstructor<T, V, A>}
+ */
 export function lens<T extends object, V, A>(
   lensDefConstructor: LensDefConstructor<T, V, A>
 ): LensConstructor<T, V, A> {
@@ -53,6 +142,9 @@ export function lens<T extends object, V, A>(
   };
 }
 
+/**
+ * Proxy handler used by lenses.
+ */
 const lensProxyHandler: ProxyHandler<LensObject<any, any, any>> = {
   // getPrototypeOf: let it go for instanceof checks
   setPrototypeOf() {
@@ -74,10 +166,6 @@ const lensProxyHandler: ProxyHandler<LensObject<any, any, any>> = {
   },
   get(targetLensObj, key) {
     switch (key) {
-      case "_":
-        return _(targetLensObj.cursor$);
-      case "$":
-        return targetLensObj.cursor$;
       case lensObject:
         return targetLensObj;
     }

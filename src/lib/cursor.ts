@@ -1,9 +1,12 @@
 import { nothing, Patch, PatchListener, produce } from "immer";
 import { devMode } from "./devMode";
 import { isRollbackUpdate } from "./rollbackUpdate";
-import { freezeData } from "./utils";
+import { Disposer, freezeData } from "./utils";
 export { nothing, Patch, PatchListener } from "immer";
 
+/**
+ * A cursor administration object.
+ */
 export interface CursorObject {
   store: StoreObject<any>;
   path: CursorStep[];
@@ -24,14 +27,21 @@ export interface CursorObject {
   cache: Map<CursorStep, CursorObject>;
 }
 
+/**
+ * A cursor step (key access or function call).
+ */
 export type CursorStep = string | number | symbol | CursorCallStep;
 
+/**
+ * A cursor function call step.
+ */
 export class CursorCallStep {
   constructor(readonly ctx: any, readonly args: any) {}
 }
 
-export type Disposer = () => void;
-
+/**
+ * Root store administration object for a cursor.
+ */
 interface StoreObject<T> {
   store: T;
   draftStore?: T;
@@ -43,8 +53,16 @@ interface StoreObject<T> {
   emitPatches(patches: Patch[], inversePatches: Patch[]): void;
 }
 
+/**
+ * Symbol used to access the cursor administration object.
+ */
 const cursorObject = Symbol("cursorObject");
 
+/**
+ * Ensures that a given value is a cursor.
+ *
+ * @param {*} cursor
+ */
 function ensureIsCursor(cursor: any) {
   if (devMode) {
     if (!isCursor(cursor)) {
@@ -54,9 +72,8 @@ function ensureIsCursor(cursor: any) {
 }
 
 /**
- * Gets info about the given cursor.
+ * Gets the administration object of the given cursor.
  *
- * @export
  * @param {*} cursor
  * @returns {CursorObject}
  */
@@ -68,7 +85,6 @@ function getCursorObject(cursor: any): CursorObject {
 /**
  * Gets the store object of a given cursor.
  *
- * @export
  * @param {*} cursor
  * @returns {*}
  */
@@ -104,7 +120,7 @@ export function getPath(cursor: any): CursorStep[] {
  *
  * @export
  * @param {*} cursor
- * @returns {cursor is CursorObject} true if the value is a cursor
+ * @returns {boolean} true if the value is a cursor
  */
 export function isCursor(cursor: any): boolean {
   return typeof cursor === "function" && !!cursor[cursorObject];
@@ -134,11 +150,27 @@ export function cursorToString(cursor: any): string {
   return "/" + str.join("/");
 }
 
-function stepCursor(cursor: any, step: CursorStep) {
+/**
+ * Creates a new cursor administration object based on another one and adds a step to it.
+ *
+ * @param {*} cursor
+ * @param {CursorStep} step
+ * @returns
+ */
+function stepCursor(cursor: any, step: CursorStep): CursorObject {
   const cursorObj = getCursorObject(cursor);
   return newCursorObject(cursorObj.store, [...cursorObj.path, step], cursorObj);
 }
 
+/**
+ * Executes a cursor to get the value it points to.
+ *
+ * @template T
+ * @param {T} cursor
+ * @param {boolean} safeMode
+ * @param {boolean} draft
+ * @returns {(T | typeof broken)}
+ */
 function runCursor<T>(cursor: T, safeMode: boolean, draft: boolean): T | typeof broken {
   const cursorObj = getCursorObject(cursor);
   const store = cursorObj.store;
@@ -187,6 +219,14 @@ function runCursor<T>(cursor: T, safeMode: boolean, draft: boolean): T | typeof 
   return value;
 }
 
+/**
+ * Creates a new cursor administration object.
+ *
+ * @param {StoreObject<any>} store
+ * @param {CursorStep[]} path
+ * @param {(CursorObject | undefined)} parentCursorObject
+ * @returns {CursorObject}
+ */
 function newCursorObject(
   store: StoreObject<any>,
   path: CursorStep[],
@@ -225,6 +265,9 @@ function newCursorObject(
   return cursor;
 }
 
+/**
+ * Proxy handler used by cursors.
+ */
 const cursorProxyHandler: ProxyHandler<CursorObject> = {
   // getPrototypeOf: let it go for instanceof checks
   setPrototypeOf() {

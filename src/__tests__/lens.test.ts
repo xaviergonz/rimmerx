@@ -1,4 +1,4 @@
-import { createStore, lens, _ } from "..";
+import { createStore, getLensCursor, getLensData, lens, _ } from "..";
 import { subscribeTo } from "../lib/cursor";
 import { devMode } from "../lib/devMode";
 
@@ -97,11 +97,11 @@ test("reading property", () => {
 });
 
 test("getting original object", () => {
-  expect(firstUser._).toBe(_($firstUser));
+  expect(getLensData(firstUser)).toBe(_($firstUser));
 });
 
 test("getting original cursor", () => {
-  expect(firstUser.$).toBe($firstUser);
+  expect(getLensCursor(firstUser)).toBe($firstUser);
 });
 
 test("setting/deleting a property throws", () => {
@@ -125,9 +125,10 @@ test("'in' operator works (has)", () => {
 });
 
 test("Object.keys/values/entries work (ownKeys))", () => {
-  expect(Object.keys(firstUser)).toEqual(Object.keys(firstUser._));
-  expect(Object.values(firstUser)).toEqual(Object.values(firstUser._));
-  expect(Object.entries(firstUser)).toEqual(Object.entries(firstUser._));
+  const firstUserData = getLensData(firstUser);
+  expect(Object.keys(firstUser)).toEqual(Object.keys(firstUserData));
+  expect(Object.values(firstUser)).toEqual(Object.values(firstUserData));
+  expect(Object.entries(firstUser)).toEqual(Object.entries(firstUserData));
 });
 
 test("for...in works (enumerate)", () => {
