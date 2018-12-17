@@ -1,6 +1,6 @@
 import { nothing, Patch, PatchListener, produce } from "immer";
 import { devMode } from "./devMode";
-import { isRollbackUpdate } from "./updateRollback";
+import { isRollbackUpdate } from "./rollbackUpdate";
 import { freezeData } from "./utils";
 export { nothing, Patch, PatchListener } from "immer";
 
