@@ -3,7 +3,12 @@
 import { Patch, PatchListener } from "immer";
 import { devMode } from "../devMode";
 import { Disposer, freezeData } from "../utils";
-import { broken, CursorCallStep, cursorObject, CursorStep, isCursor } from "./cursorShared";
+import { broken, CursorCallStep, CursorStep, isCursor } from "./cursorShared";
+
+/**
+ * Symbol used to access the cursor administration object.
+ */
+export const cursorObject = Symbol("cursorObject");
 
 /**
  * A cursor administration object.

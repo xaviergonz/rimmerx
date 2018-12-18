@@ -1,7 +1,4 @@
-/**
- * Symbol used to access the cursor administration object.
- */
-export const cursorObject = Symbol("cursorObject");
+import { cursorObject } from "./_cursor";
 
 /**
  * A cursor step (key access or function call).
