@@ -551,7 +551,7 @@ export function set<T, TVal extends T>(cursor: T, value: TVal): void {
 }
 
 /**
- * Run a callback whenver the value the cursor points to changes.
+ * Run a callback whenever the value the cursor points to changes.
  * If the cursor eventually becomes broken, then the `broken` symbol will be passed as new/old value.
  * Returns a disposer for disposal.
  *

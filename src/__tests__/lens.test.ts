@@ -125,7 +125,8 @@ test("getting original object", () => {
 });
 
 test("getting original cursor", () => {
-  expect(getLensCursor(firstUser)).toBe($firstUser);
+  const cursor = getLensCursor(firstUser);
+  expect(cursor).toBe($firstUser);
 });
 
 test("setting/deleting a property throws", () => {

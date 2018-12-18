@@ -1,15 +1,30 @@
-import { update, _ } from "./cursor";
+import { broken, subscribeTo, update, _ } from "./cursor";
 import { devMode } from "./devMode";
+import { Disposer } from "./utils";
 
 /**
  * An instantiated lens.
  */
-export type Lens<T, V, A> = T &
-  V &
-  A & {
-    readonly _: T; // orginal resolved value
-    readonly $: T; // wrapped cursor
-  };
+export type Lens<T, V, A> = T & V & A & LensTypes<T, V, A>;
+
+export type AnyLens = Lens<any, any, any>;
+
+const fakeT = Symbol();
+const fakeV = Symbol();
+const fakeA = Symbol();
+/**
+ * Fake interface only used for typings.
+ */
+interface LensTypes<T, V, A> {
+  // fake, only for typings
+  [fakeT]?: T;
+  [fakeV]?: V;
+  [fakeA]?: A;
+}
+
+type ExtractLensT<L> = L extends LensTypes<infer T, any, any> ? T : never;
+type ExtractLensV<L> = L extends LensTypes<any, infer T, any> ? T : never;
+type ExtractLensA<L> = L extends LensTypes<any, any, infer T> ? T : never;
 
 /**
  * A lens instance constructor.
@@ -67,10 +82,13 @@ function ensureIsLens(lensInstance: any) {
 /**
  * Gets the adiministration object of a lens instance.
  *
- * @param {*} lensInstance
- * @returns {LensObject<any, any, any>}
+ * @template L
+ * @param {L} lensInstance
+ * @returns {LensObject<ExtractLensT<L>, ExtractLensV<L>, ExtractLensA<L>>}
  */
-function getLensObject(lensInstance: any): LensObject<any, any, any> {
+function getLensObject<L extends AnyLens>(
+  lensInstance: L
+): LensObject<ExtractLensT<L>, ExtractLensV<L>, ExtractLensA<L>> {
   ensureIsLens(lensInstance);
   return lensInstance[lensObject];
 }
@@ -79,10 +97,13 @@ function getLensObject(lensInstance: any): LensObject<any, any, any> {
  * Returns if a value is a lens.
  *
  * @export
+ * @template T
+ * @template V
+ * @template A
  * @param {*} lensInstance
- * @returns {boolean} true if the value is a lens.
+ * @returns {lensInstance is Lens<T, V, A>}
  */
-export function isLens(lensInstance: any): lensInstance is Lens<any, any, any> {
+export function isLens<T = any, V = any, A = any>(lensInstance: any): lensInstance is Lens<T, V, A> {
   return typeof lens === "function" && !!lensInstance[lensObject];
 }
 
@@ -90,11 +111,11 @@ export function isLens(lensInstance: any): lensInstance is Lens<any, any, any> {
  * Returns the cursor a lens instance is using internally.
  *
  * @export
- * @template T
- * @param {T} lensInstance
- * @returns {T}
+ * @template L
+ * @param {L} lensInstance
+ * @returns {ExtractLensT<L>}
  */
-export function getLensCursor<T>(lensInstance: Lens<T, any, any>): T {
+export function getLensCursor<L extends AnyLens>(lensInstance: L): ExtractLensT<L> {
   return getLensObject(lensInstance).cursor$;
 }
 
@@ -102,11 +123,11 @@ export function getLensCursor<T>(lensInstance: Lens<T, any, any>): T {
  * Gets the data a lens instance is pointing to through its cursor.
  *
  * @export
- * @template T
- * @param {Lens<T, any, any>} lensInstance
- * @returns {T}
+ * @template L
+ * @param {L} lensInstance
+ * @returns {ExtractLensT<L>}
  */
-export function getLensData<T>(lensInstance: Lens<T, any, any>): T {
+export function getLensData<L extends AnyLens>(lensInstance: L): ExtractLensT<L> {
   return _(getLensCursor(lensInstance));
 }
 
@@ -304,3 +325,22 @@ const lensDataProxyHandler: ProxyHandler<LensObject<any, any, any>> = {
     return Reflect.construct(targetLensObj.dataSource, args, newTarget);
   }
 };
+
+/**
+ * Run a callback whenever the value the lens inner cursor points to changes.
+ * If the cursor eventually becomes broken, then the `broken` symbol will be passed as new/old value.
+ * Returns a disposer for disposal.
+ *
+ * @export
+ * @template L
+ * @param {L} lensInstance
+ * @param {((newValue: ExtractLensT<L> | typeof broken, oldValue: ExtractLensT<L> | typeof broken) => void)} subscription
+ * @returns {Disposer}
+ */
+export function subscribeToLens<L extends AnyLens>(
+  lensInstance: L,
+  subscription: (newValue: ExtractLensT<L> | typeof broken, oldValue: ExtractLensT<L> | typeof broken) => void
+): Disposer {
+  const cursor = getLensCursor(lensInstance);
+  return subscribeTo(cursor, subscription);
+}
