@@ -1,96 +1,11 @@
-import { nothing, Patch, PatchListener, produce } from "immer";
-import { devMode } from "./devMode";
+import { nothing, PatchListener, produce } from "immer";
+import { Disposer, freezeData } from "../utils";
+import { broken, CursorCallStep, CursorStep } from "./cursorShared";
+import { emitCursorAccess } from "./onCursorAccess";
 import { isRollbackUpdate } from "./rollbackUpdate";
-import { Disposer, freezeData } from "./utils";
+import { getCursorObject, getStoreObject, newCursorObject, runCursor, StoreObject } from "./_cursor";
+
 export { nothing, Patch, PatchListener } from "immer";
-
-/**
- * A cursor administration object.
- */
-export interface CursorObject {
-  store: StoreObject<any>;
-  path: CursorStep[];
-  parent?: CursorObject;
-  proxy: any;
-  functional: boolean;
-
-  memoizedValue?: {
-    lastChange: number;
-    result: any;
-  };
-
-  safeMemoizedValue?: {
-    lastChange: number;
-    result: any;
-  };
-
-  cache: Map<CursorStep, CursorObject>;
-}
-
-/**
- * A cursor step (key access or function call).
- */
-export type CursorStep = string | number | symbol | CursorCallStep;
-
-/**
- * A cursor function call step.
- */
-export class CursorCallStep {
-  constructor(readonly ctx: any, readonly args: any) {}
-}
-
-/**
- * Root store administration object for a cursor.
- */
-interface StoreObject<T> {
-  store: T;
-  draftStore?: T;
-  updateCancelled: boolean;
-  nofChanges: number;
-
-  subscribeToChanges(fn: () => void): Disposer;
-  subscribeToPatches(fn: PatchListener): Disposer;
-  emitPatches(patches: Patch[], inversePatches: Patch[]): void;
-}
-
-/**
- * Symbol used to access the cursor administration object.
- */
-const cursorObject = Symbol("cursorObject");
-
-/**
- * Ensures that a given value is a cursor.
- *
- * @param {*} cursor
- */
-function ensureIsCursor(cursor: any) {
-  if (devMode) {
-    if (!isCursor(cursor)) {
-      throw new Error("invalid cursor");
-    }
-  }
-}
-
-/**
- * Gets the administration object of the given cursor.
- *
- * @param {*} cursor
- * @returns {CursorObject}
- */
-function getCursorObject(cursor: any): CursorObject {
-  ensureIsCursor(cursor);
-  return cursor[cursorObject];
-}
-
-/**
- * Gets the store object of a given cursor.
- *
- * @param {*} cursor
- * @returns {*}
- */
-function getStoreObject<T = any>(cursor: any): StoreObject<T> {
-  return getCursorObject(cursor).store;
-}
 
 /**
  * Returns if a cursor is functional.
@@ -116,17 +31,6 @@ export function getPath(cursor: any): CursorStep[] {
 }
 
 /**
- * Returns if a value is a cursor.
- *
- * @export
- * @param {*} cursor
- * @returns {boolean} true if the value is a cursor
- */
-export function isCursor(cursor: any): boolean {
-  return typeof cursor === "function" && !!cursor[cursorObject];
-}
-
-/**
  * Gets the string representation of a cursor.
  *
  * ```js
@@ -149,170 +53,6 @@ export function cursorToString(cursor: any): string {
   }
   return "/" + str.join("/");
 }
-
-/**
- * Creates a new cursor administration object based on another one and adds a step to it.
- *
- * @param {*} cursor
- * @param {CursorStep} step
- * @returns
- */
-function stepCursor(cursor: any, step: CursorStep): CursorObject {
-  const cursorObj = getCursorObject(cursor);
-  return newCursorObject(cursorObj.store, [...cursorObj.path, step], cursorObj);
-}
-
-/**
- * Executes a cursor to get the value it points to.
- *
- * @template T
- * @param {T} cursor
- * @param {boolean} safeMode
- * @param {boolean} draft
- * @returns {(T | typeof broken)}
- */
-function runCursor<T>(cursor: T, safeMode: boolean, draft: boolean): T | typeof broken {
-  const cursorObj = getCursorObject(cursor);
-  const store = cursorObj.store;
-
-  if (!draft) {
-    // value caching is not available while we are in the middle of an update
-    // since values become mutable
-    const oldMemoizedValue = safeMode ? cursorObj.safeMemoizedValue : cursorObj.memoizedValue;
-    if (oldMemoizedValue && oldMemoizedValue.lastChange === store.nofChanges) {
-      return oldMemoizedValue.result;
-    }
-  }
-
-  let value: any = store;
-
-  let index = 0;
-  for (let step of cursorObj.path) {
-    if (draft && index === 0) {
-      step = "draftStore";
-    }
-
-    if (safeMode && (value === undefined || value === null)) {
-      return broken;
-    }
-    if (step instanceof CursorCallStep) {
-      const targetThis = isCursor(step.ctx) ? runCursor(step.ctx, safeMode, draft) : step.ctx;
-      value = value.apply(targetThis, step.args);
-    } else {
-      value = value[step];
-    }
-    index++;
-  }
-
-  if (!draft) {
-    const newMemoizedValue = {
-      lastChange: store.nofChanges,
-      result: value
-    };
-    if (!safeMode) {
-      cursorObj.memoizedValue = newMemoizedValue;
-    } else {
-      cursorObj.safeMemoizedValue = newMemoizedValue;
-    }
-  }
-
-  return value;
-}
-
-/**
- * Creates a new cursor administration object.
- *
- * @param {StoreObject<any>} store
- * @param {CursorStep[]} path
- * @param {(CursorObject | undefined)} parentCursorObject
- * @returns {CursorObject}
- */
-function newCursorObject(
-  store: StoreObject<any>,
-  path: CursorStep[],
-  parentCursorObject: CursorObject | undefined
-): CursorObject {
-  const lastStep = !parentCursorObject ? undefined : path[path.length - 1];
-
-  // try the cache first
-  // this will automatically work properly for call steps,
-  // since they will be different instances and never share the same cache bucket
-  const cachedCursor = parentCursorObject && parentCursorObject.cache.get(lastStep!);
-  if (cachedCursor) {
-    return cachedCursor;
-  }
-
-  function cursor() {
-    // do nothing, this is just to keep the proxy happy when invoking functions
-  }
-
-  let functional: boolean = false;
-  if (parentCursorObject) {
-    functional = parentCursorObject.functional || lastStep instanceof CursorCallStep;
-  }
-
-  cursor.store = store;
-  cursor.path = freezeData(path);
-  cursor.parent = parentCursorObject;
-  cursor.proxy = new Proxy(cursor as any, cursorProxyHandler);
-  cursor.functional = functional;
-  cursor.cache = new Map();
-
-  if (parentCursorObject) {
-    parentCursorObject.cache.set(lastStep!, cursor);
-  }
-
-  return cursor;
-}
-
-/**
- * Proxy handler used by cursors.
- */
-const cursorProxyHandler: ProxyHandler<CursorObject> = {
-  // getPrototypeOf: let it go for instanceof checks
-  setPrototypeOf() {
-    throw new Error("a cursor cannot be used to set a prototype");
-  },
-  isExtensible() {
-    return false;
-  },
-  preventExtensions() {
-    return true;
-  },
-  getOwnPropertyDescriptor() {
-    throw new Error("a cursor cannot be used to get a property descriptor");
-  },
-  has() {
-    throw new Error("a cursor cannot be used to check if a property is present");
-  },
-  get(targetCursorObj, key) {
-    if (key === cursorObject) {
-      return targetCursorObj;
-    }
-    return stepCursor(targetCursorObj.proxy, key).proxy;
-  },
-  set() {
-    throw new Error("a cursor cannot be used to set a property");
-  },
-  deleteProperty() {
-    throw new Error("a cursor cannot be used to delete a property");
-  },
-  defineProperty() {
-    throw new Error("a cursor cannot be used to define a property");
-  },
-  enumerate() {
-    throw new Error("a cursor cannot be used to enumerate properties");
-  },
-  ownKeys() {
-    throw new Error("a cursor cannot be used to enumerate keys");
-  },
-  apply(targetCursorObj, ctx, args) {
-    return stepCursor(targetCursorObj.proxy, new CursorCallStep(ctx, args)).proxy;
-  },
-  construct() {
-    throw new Error("a cursor cannot be used to construct an object");
-  }
-};
 
 /**
  * Creates a new store cursor.
@@ -383,7 +123,9 @@ export function createStore<T>(data: T): T {
  * @returns {T}
  */
 export function _<T>(cursor: T): T {
-  return runCursor(cursor, false, false) as T;
+  const value = runCursor(cursor, false, false) as T;
+  emitCursorAccess({ cursor, value });
+  return value;
 }
 
 /**
@@ -400,11 +142,6 @@ export function get<T>(cursor: T): T {
 }
 
 /**
- * Indicates that a cursor value could not be calculated since the selector is broken.
- */
-export const broken = Symbol("broken");
-
-/**
  * Executes a cursor query, returning its result, or `broken` if at some part of the evalution the value in the middle is `undefined` or `null`.
  *
  * @alias safeGet
@@ -414,7 +151,9 @@ export const broken = Symbol("broken");
  * @returns {(T | typeof broken)}
  */
 export function _safe<T>(cursor: T): T | typeof broken {
-  return runCursor(cursor, true, false);
+  const value = runCursor(cursor, true, false);
+  emitCursorAccess({ cursor, value });
+  return value;
 }
 
 /**
@@ -551,6 +290,11 @@ export function set<T, TVal extends T>(cursor: T, value: TVal): void {
 }
 
 /**
+ * Subscription listener callback.
+ */
+export type SubscriptionListener<T> = (newValue: T | typeof broken, oldValue: T | typeof broken) => void;
+
+/**
  * Run a callback whenever the value the cursor points to changes.
  * If the cursor eventually becomes broken, then the `broken` symbol will be passed as new/old value.
  * Returns a disposer for disposal.
@@ -561,10 +305,7 @@ export function set<T, TVal extends T>(cursor: T, value: TVal): void {
  * @param {((newValue: T | typeof broken, oldValue: T | typeof broken) => void)} subscription
  * @returns {Disposer}
  */
-export function subscribeTo<T>(
-  cursor: T,
-  subscription: (newValue: T | typeof broken, oldValue: T | typeof broken) => void
-): Disposer {
+export function subscribeTo<T>(cursor: T, subscription: SubscriptionListener<T>): Disposer {
   let currentValue = _(cursor);
 
   const store = getStoreObject(cursor);

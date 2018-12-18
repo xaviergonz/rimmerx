@@ -1,17 +1,20 @@
 import {
   broken,
   createStore,
+  CursorAccess,
   cursorToString,
   get,
   getParent,
   isFunctional,
   nothing,
+  onCursorAccess,
   PatchListener,
   rollbackUpdate,
   safeGet,
   set,
   subscribeTo,
   subscribeToPatches,
+  trackCursorAccess,
   update,
   _,
   _safe
@@ -307,4 +310,41 @@ test("subscribeToPatches", () => {
     u.name = "james";
   });
   expect(calls).toBe(1);
+});
+
+test("onCursorAccess", () => {
+  let evs: CursorAccess[] = [];
+  const disposer = onCursorAccess(ev => {
+    evs.push(ev);
+  });
+
+  _($firstUser);
+  expect(evs).toEqual([{ cursor: $firstUser, value: data.users[0] }]);
+  evs = [];
+
+  _($firstUserName);
+  expect(evs).toEqual([{ cursor: $firstUserName, value: data.users[0].name }]);
+  evs = [];
+
+  _($firstUser.name);
+  expect(evs).toEqual([{ cursor: $firstUserName, value: data.users[0].name }]);
+  evs = [];
+
+  disposer();
+
+  _($firstUser);
+  expect(evs).toEqual([]);
+});
+
+test("trackCursorAccess", () => {
+  const evs = trackCursorAccess(() => {
+    _($firstUser);
+    _($firstUserName);
+    _($firstUser.name);
+  });
+  expect(evs).toEqual([
+    { cursor: $firstUser, value: data.users[0] },
+    { cursor: $firstUserName, value: data.users[0].name },
+    { cursor: $firstUserName, value: data.users[0].name }
+  ]);
 });

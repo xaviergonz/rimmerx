@@ -1,5 +1,4 @@
-import { createStore, getLensCursor, getLensData, lens, _ } from "..";
-import { subscribeTo } from "../lib/cursor";
+import { createStore, getLensCursor, getLensData, lens, subscribeTo, _ } from "..";
 import { devMode } from "../lib/devMode";
 
 interface User {

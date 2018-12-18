@@ -1,4 +1,4 @@
-import { broken, subscribeTo, update, _ } from "./cursor";
+import { subscribeTo, SubscriptionListener, update, _ } from "./cursor/cursor";
 import { devMode } from "./devMode";
 import { Disposer } from "./utils";
 
@@ -339,7 +339,7 @@ const lensDataProxyHandler: ProxyHandler<LensObject<any, any, any>> = {
  */
 export function subscribeToLens<L extends AnyLens>(
   lensInstance: L,
-  subscription: (newValue: ExtractLensT<L> | typeof broken, oldValue: ExtractLensT<L> | typeof broken) => void
+  subscription: SubscriptionListener<ExtractLensT<L>>
 ): Disposer {
   const cursor = getLensCursor(lensInstance);
   return subscribeTo(cursor, subscription);

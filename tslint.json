@@ -10,6 +10,8 @@
     "object-literal-sort-keys": false,
     "member-access": false,
     "prefer-conditional-expression": false,
-    "ordered-imports": false
+    "ordered-imports": false,
+    "max-classes-per-file": false,
+    "array-type": false
   }
 }
