@@ -25,9 +25,14 @@ export interface LensDef<V, A> {
 }
 
 /**
+ * Run in action function definition.
+ */
+export type RunInAction = (fn: (...args: any) => any) => any;
+
+/**
  * A constructor for lens definitions.
  */
-export type LensDefConstructor<T, V, A> = (data: T) => LensDef<V, A>;
+export type LensDefConstructor<T, V, A> = (data: T, others: { runInAction: RunInAction }) => LensDef<V, A>;
 
 /**
  * A symbol used to access the lens administration object.
@@ -39,13 +44,11 @@ const lensObject = Symbol("lensObject");
  */
 interface LensObject<T, V, A> {
   cursor$: T;
-  lensDefConstructor: LensDefConstructor<T, V, A>;
+  lensDef: LensDef<V, A>;
   proxy: Lens<T, V, A>;
 
-  memoizedLensDef?: {
-    data: T;
-    lensDef: LensDef<V, A>;
-  };
+  dataSource?: T;
+  withDataSource<R>(data: T, fn: () => R): R;
 }
 
 /**
@@ -131,10 +134,34 @@ export function lens<T extends object, V, A>(
 
     lensObj = {
       cursor$: cursor,
-      lensDefConstructor,
-      proxy: undefined as any
+      lensDef: undefined as any,
+      proxy: undefined as any,
+
+      dataSource: undefined,
+      withDataSource(data, fn) {
+        const previous = this.dataSource;
+        try {
+          this.dataSource = data;
+          return fn();
+        } finally {
+          this.dataSource = previous;
+        }
+      }
     };
+
     lensObj.proxy = new Proxy(lensObj, lensProxyHandler) as any;
+
+    const dataProxy = new Proxy(lensObj, lensDataProxyHandler) as any;
+    const runInAction: RunInAction = fn => {
+      let retVal;
+      update(lensObj!.cursor$, draftData => {
+        return lensObj!.withDataSource(draftData, () => {
+          retVal = fn.apply(lensObj!.proxy);
+        });
+      });
+      return retVal;
+    };
+    lensObj.lensDef = lensDefConstructor(dataProxy, { runInAction });
 
     cachedLenses.set(cursor, lensObj);
 
@@ -170,33 +197,40 @@ const lensProxyHandler: ProxyHandler<LensObject<any, any, any>> = {
         return targetLensObj;
     }
 
-    const data = _(targetLensObj.cursor$);
-
     // try to reused a previously generated lens definition
-    let lensDef: LensDef<any, any>;
-    if (targetLensObj.memoizedLensDef && targetLensObj.memoizedLensDef.data === data) {
-      lensDef = targetLensObj.memoizedLensDef.lensDef;
-    } else {
-      lensDef = targetLensObj.lensDefConstructor(data);
-      targetLensObj.memoizedLensDef = {
-        data,
-        lensDef
-      };
-    }
+    const lensDef = targetLensObj.lensDef;
 
     if (lensDef.views && key in lensDef.views) {
-      return Reflect.get(lensDef.views, key);
+      return targetLensObj.withDataSource(_(targetLensObj.cursor$), () => {
+        const ret = Reflect.get(lensDef.views, key);
+
+        if (typeof ret === "function") {
+          // view functions
+          return (...args: any[]) => {
+            return targetLensObj.withDataSource(_(targetLensObj.cursor$), () => {
+              return ret.apply(targetLensObj.proxy, args);
+            });
+          };
+        } else {
+          // view getters
+          return ret;
+        }
+      });
     } else if (lensDef.actions && key in lensDef.actions) {
+      // actions
       return (...args: any[]) => {
         let retVal;
         update(targetLensObj.cursor$, draftData => {
-          lensDef = targetLensObj.lensDefConstructor(draftData);
-          const action: (...args: any[]) => any = Reflect.get(lensDef.actions, key);
-          retVal = action.apply(lensDef.actions, args);
+          return targetLensObj.withDataSource(draftData, () => {
+            const action: (...args: any[]) => any = Reflect.get(lensDef.actions, key);
+            retVal = action.apply(targetLensObj.proxy, args);
+          });
         });
         return retVal;
       };
     } else {
+      // get from the original object
+      const data = _(targetLensObj.cursor$);
       return Reflect.get(data, key);
     }
   },
@@ -220,5 +254,53 @@ const lensProxyHandler: ProxyHandler<LensObject<any, any, any>> = {
   },
   construct() {
     throw new Error("a lens cannot be used to construct an object");
+  }
+};
+
+/**
+ * Proxy handler used by lenses to get/set data.
+ */
+const lensDataProxyHandler: ProxyHandler<LensObject<any, any, any>> = {
+  getPrototypeOf(targetLensObj) {
+    return Reflect.getPrototypeOf(targetLensObj.dataSource);
+  },
+  setPrototypeOf(targetLensObj, proto) {
+    return Reflect.setPrototypeOf(targetLensObj.dataSource, proto);
+  },
+  isExtensible(targetLensObj) {
+    return Reflect.isExtensible(targetLensObj.dataSource);
+  },
+  preventExtensions(targetLensObj) {
+    return Reflect.preventExtensions(targetLensObj.dataSource);
+  },
+  getOwnPropertyDescriptor(targetLensObj, p) {
+    return Reflect.getOwnPropertyDescriptor(targetLensObj.dataSource, p);
+  },
+  has(targetLensObj, p) {
+    return Reflect.has(targetLensObj.dataSource, p);
+  },
+  get(targetLensObj, key) {
+    return Reflect.get(targetLensObj.dataSource, key);
+  },
+  set(targetLensObj, p, val, receiver) {
+    return Reflect.set(targetLensObj.dataSource, p, val, receiver);
+  },
+  deleteProperty(targetLensObj, p) {
+    return Reflect.deleteProperty(targetLensObj.dataSource, p);
+  },
+  defineProperty(targetLensObj, p, attr) {
+    return Reflect.defineProperty(targetLensObj.dataSource, p, attr);
+  },
+  enumerate(targetLensObj) {
+    return Reflect.enumerate(targetLensObj.dataSource) as any;
+  },
+  ownKeys(targetLensObj) {
+    return Reflect.ownKeys(targetLensObj.dataSource);
+  },
+  apply(targetLensObj, thisArg, args) {
+    return Reflect.apply(targetLensObj.dataSource, thisArg, args);
+  },
+  construct(targetLensObj, args, newTarget) {
+    return Reflect.construct(targetLensObj.dataSource, args, newTarget);
   }
 };

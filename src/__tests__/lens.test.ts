@@ -11,15 +11,24 @@ function userToString(user: User) {
   return user.active ? `${user.name} (active)` : `${user.name} (inactive)`;
 }
 
-const $User = lens((user: User) => {
+const $User = lens((user: User, { runInAction }) => {
   const views = {
     get stringData() {
       return userToString(user);
     },
 
+    get getterWithinGetter() {
+      return this.stringData + this.stringData;
+    },
+
     get writeGetter() {
       user.name = "write";
       return "write";
+    },
+
+    get getterThatUsesAction() {
+      actions.setActive(false);
+      return true;
     },
 
     viewWithParams(v: string) {
@@ -46,9 +55,24 @@ const $User = lens((user: User) => {
 
     setActive(val: boolean) {
       user.active = val;
-    }
+    },
 
-    // TODO: async?
+    async setNameAndActiveAsync(val: string, active: boolean): Promise<string> {
+      user.name = val;
+      await Promise.resolve();
+
+      // actions within actions
+      this.setActive(active);
+
+      await Promise.resolve();
+
+      // run in action required after promises
+      runInAction(() => {
+        user.name += val;
+      });
+
+      return val;
+    }
   };
 
   return { views, actions };
@@ -150,6 +174,7 @@ test("for...in works (enumerate)", () => {
 test("getters work", () => {
   expect(firstUser.stringData).toBe("first (active)");
   expect(firstUser.viewWithParams("hi")).toBe("firsthi");
+  expect(firstUser.getterWithinGetter).toBe("first (active)first (active)");
 });
 
 test("actions work", () => {
@@ -179,13 +204,30 @@ test("actions work", () => {
   expect(_($data)).not.toBe(originalData);
 });
 
+test("async actions work", async () => {
+  expect(firstUser.name).toBe("first");
+  expect(firstUser.active).toBe(true);
+  expect(_($data)).toBe(originalData);
+
+  const ret = await firstUser.setNameAndActiveAsync("myname", false);
+
+  expect(ret).toBe("myname");
+  expect(firstUser.name).toBe("mynamemyname");
+  expect(firstUser.active).toBe(false);
+  expect(_($data)).not.toBe(originalData);
+});
+
 test("getters should not be able to write (in dev mode)", () => {
   if (devMode) {
     const oldName = firstUser.name;
     expect(() => {
       // tslint:disable-next-line:no-unused-expression
       firstUser.writeGetter;
-    }).toThrow("Cannot assign to read only property");
+    }).toThrow();
+    expect(() => {
+      // tslint:disable-next-line:no-unused-expression
+      firstUser.getterThatUsesAction;
+    }).toThrow();
     expect(_($firstUserName)).toBe(oldName);
     expect(firstUser.name).toBe(oldName);
   }
