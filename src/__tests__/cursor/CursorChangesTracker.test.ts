@@ -1,16 +1,23 @@
-import { CursorChangesTracker, set, _ } from "../..";
+import { CursorChange, CursorChangesTracker, set, _ } from "../..";
 import { $firstUser, $firstUserName } from "./testbed";
 
 test("CursorChangesTracker", () => {
   const tracker = new CursorChangesTracker();
-  let evs: any = [];
-  tracker.subscribe((cursor, newVal, oldVal) => {
-    evs.push({
-      cursor,
-      newVal,
-      oldVal
-    });
+  let evs: CursorChange[][] = [];
+  tracker.subscribe(changes => {
+    evs.push(changes);
   });
+
+  const expectChange = (changes: CursorChange[]) => {
+    expect(evs.length).toBe(1);
+    expect(evs[0].length).toBe(changes.length);
+    changes.forEach((ch, i) => {
+      const ev = evs[0][i];
+      expect(ev.cursor).toBe(ch.cursor);
+      expect(ev.newValue).toEqual(ch.newValue);
+      expect(ev.oldValue).toEqual(ch.oldValue);
+    });
+  };
 
   tracker.track(() => {
     _($firstUser.name);
@@ -19,7 +26,7 @@ test("CursorChangesTracker", () => {
   expect(evs).toEqual([]);
 
   set($firstUser.name, "john");
-  expect(evs).toEqual([{ cursor: $firstUserName, newVal: "john", oldVal: "first" }]);
+  expectChange([{ cursor: $firstUserName, newValue: "john", oldValue: "first" }]);
   evs = [];
 
   set($firstUser.active, false);
@@ -34,16 +41,16 @@ test("CursorChangesTracker", () => {
 
   set($firstUser.name, "janne");
   // two changes since one is the parent of the other
-  expect(evs).toEqual([
-    { cursor: $firstUserName, newVal: "janne", oldVal: "john" },
-    { cursor: $firstUser, newVal: { name: "janne", active: false }, oldVal: { name: "john", active: false } }
+  expectChange([
+    { cursor: $firstUserName, newValue: "janne", oldValue: "john" },
+    { cursor: $firstUser, newValue: { name: "janne", active: false }, oldValue: { name: "john", active: false } }
   ]);
   evs = [];
 
   set($firstUser.active, true);
   // only the parent should generate a change
-  expect(evs).toEqual([
-    { cursor: $firstUser, newVal: { name: "janne", active: true }, oldVal: { name: "janne", active: false } }
+  expectChange([
+    { cursor: $firstUser, newValue: { name: "janne", active: true }, oldValue: { name: "janne", active: false } }
   ]);
   evs = [];
 
