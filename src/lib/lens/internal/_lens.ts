@@ -34,7 +34,7 @@ export interface LensObject<T, V, A> {
   proxy: Lens<T, V, A>;
 
   dataSource?: T;
-  withDataSource<R>(data: T, fn: () => R): R;
+  withDataSource<R>(data: T, fn: () => R, writeOperation: boolean): R;
 }
 
 /**
@@ -82,30 +82,42 @@ export const lensProxyHandler: ProxyHandler<LensObject<any, any, any>> = {
     const lensDef = targetLensObj.lensDef;
 
     if (lensDef.views && key in lensDef.views) {
-      return targetLensObj.withDataSource(_(targetLensObj.cursor$), () => {
-        const ret = Reflect.get(lensDef.views, key);
+      return targetLensObj.withDataSource(
+        _(targetLensObj.cursor$),
+        () => {
+          const ret = Reflect.get(lensDef.views, key);
 
-        if (typeof ret === "function") {
-          // view functions
-          return (...args: any[]) => {
-            return targetLensObj.withDataSource(_(targetLensObj.cursor$), () => {
-              return ret.apply(targetLensObj.proxy, args);
-            });
-          };
-        } else {
-          // view getters
-          return ret;
-        }
-      });
+          if (typeof ret === "function") {
+            // view functions
+            return (...args: any[]) => {
+              return targetLensObj.withDataSource(
+                _(targetLensObj.cursor$),
+                () => {
+                  return ret.apply(targetLensObj.proxy, args);
+                },
+                false
+              );
+            };
+          } else {
+            // view getters
+            return ret;
+          }
+        },
+        false
+      );
     } else if (lensDef.actions && key in lensDef.actions) {
       // actions
       return (...args: any[]) => {
         let retVal;
         update(targetLensObj.cursor$, draftData => {
-          return targetLensObj.withDataSource(draftData, () => {
-            const action: (...args: any[]) => any = Reflect.get(lensDef.actions, key);
-            retVal = action.apply(targetLensObj.proxy, args);
-          });
+          return targetLensObj.withDataSource(
+            draftData,
+            () => {
+              const action: (...args: any[]) => any = Reflect.get(lensDef.actions, key);
+              retVal = action.apply(targetLensObj.proxy, args);
+            },
+            true
+          );
         });
         return retVal;
       };

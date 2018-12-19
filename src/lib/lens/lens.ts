@@ -1,4 +1,4 @@
-import { subscribeTo, SubscriptionListener, update, _ } from "../cursor";
+import { subscribeTo, SubscriptionListener, transaction, update, _ } from "../cursor";
 import { Disposer } from "../utils";
 import {
   ensureIsLens,
@@ -35,7 +35,7 @@ export interface LensDef<V, A> {
 /**
  * Run in action function definition.
  */
-export type RunInAction = (fn: (...args: any) => any) => any;
+export type RunInAction = <F extends () => any>(fn: F) => ReturnType<F>;
 
 /**
  * A constructor for lens definitions.
@@ -122,11 +122,15 @@ export function lens<T extends object, V, A>(
       proxy: undefined as any,
 
       dataSource: undefined,
-      withDataSource(data, fn) {
+      withDataSource(data, fn, writeOperation) {
         const previous = this.dataSource;
         try {
           this.dataSource = data;
-          return fn();
+          if (writeOperation) {
+            return transaction(fn);
+          } else {
+            return fn();
+          }
         } finally {
           this.dataSource = previous;
         }
@@ -136,12 +140,16 @@ export function lens<T extends object, V, A>(
     lensObj.proxy = new Proxy(lensObj, lensProxyHandler) as any;
 
     const dataProxy = new Proxy(lensObj, lensDataProxyHandler) as any;
-    const runInAction: RunInAction = fn => {
+    const runInAction = (fn: () => any): any => {
       let retVal;
       update(lensObj!.cursor$, draftData => {
-        return lensObj!.withDataSource(draftData, () => {
-          retVal = fn.apply(lensObj!.proxy);
-        });
+        return lensObj!.withDataSource(
+          draftData,
+          () => {
+            retVal = fn.apply(lensObj!.proxy);
+          },
+          true
+        );
       });
       return retVal;
     };

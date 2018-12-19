@@ -8,10 +8,10 @@ import { lockTransaction, unlockTransaction } from "./internal/_transaction";
  * @export
  * @param {() => void} fn
  */
-export function transaction(fn: () => void): void {
+export function transaction<F extends () => any>(fn: F): ReturnType<F> {
   lockTransaction();
   try {
-    fn();
+    return fn();
   } finally {
     unlockTransaction();
   }
