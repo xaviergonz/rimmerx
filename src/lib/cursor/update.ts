@@ -18,6 +18,9 @@ import { isRollbackUpdate } from "./rollbackUpdate";
  *
  * If you want to rollback without actually generating an error then use `throw rollbackUpdate`.
  *
+ * Updates are transactions in themselves, but if you want to wrap multiple updates in a single transaction
+ * see the `transaction` function.
+ *
  * @export
  * @template T
  * @param {T} cursor

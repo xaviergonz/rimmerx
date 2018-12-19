@@ -22,7 +22,9 @@ test("transaction", () => {
     set($firstUser.name, "john");
     expect(subscribeCalls).toBe(0);
     expect(patchesCalls).toBe(0);
-    set($firstUser.active, false);
+    transaction(() => {
+      set($firstUser.active, false);
+    });
     expect(subscribeCalls).toBe(0);
     expect(patchesCalls).toBe(0);
   });
