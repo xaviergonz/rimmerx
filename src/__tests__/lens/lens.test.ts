@@ -77,18 +77,6 @@ const $User = lens((user: User, { runInAction }) => {
   return { views, actions };
 });
 
-// const usersLens = lens((userArr: User[]) => ({
-//   get names() {
-//     return userArr.map(u => u.name);
-//   },
-
-//   activateAll() {
-//     userArr.forEach(u => {
-//       u.active = true;
-//     });
-//   }
-// }));
-
 const originalData = {
   users: [{ name: "first", active: true }, { name: "second", active: false }, { name: "third", active: true }]
 };
@@ -164,7 +152,7 @@ test("for...in works (enumerate)", () => {
 
   const arr2 = [];
   // tslint:disable-next-line:forin
-  for (const x in firstUser) {
+  for (const x in _($firstUser)) {
     arr2.push(x);
   }
 
