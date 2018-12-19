@@ -1,6 +1,6 @@
 import { Disposer } from "../utils";
-import { subscribeTo } from "./cursor";
 import { CursorAccess } from "./onCursorAccess";
+import { subscribeTo } from "./subscribeTo";
 import { trackCursorAccess } from "./trackCursorAccess";
 
 /**

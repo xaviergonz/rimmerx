@@ -1,9 +1,10 @@
 // cursor private internals
 
 import { Patch, PatchListener } from "immer";
-import { devMode } from "../devMode";
-import { Disposer, freezeData } from "../utils";
-import { broken, CursorCallStep, CursorStep, isCursor } from "./cursorShared";
+import { devMode } from "../../devMode";
+import { Disposer, freezeData } from "../../utils";
+import { broken } from "../get";
+import { CursorCallStep, CursorStep, isCursor } from "../misc";
 
 /**
  * Symbol used to access the cursor administration object.

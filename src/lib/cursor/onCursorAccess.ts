@@ -1,4 +1,5 @@
 import { Disposer } from "../utils";
+import { cursorAccessListeners } from "./internal/_onCursorAccess";
 
 /**
  * Event generated when a cursor is read (accessed).
@@ -12,11 +13,6 @@ export interface CursorAccess {
  * Listener for cursor access events.
  */
 export type CursorAccessListener = (event: CursorAccess) => void;
-
-/**
- * List of listeners for cursor access events.
- */
-const cursorAccessListeners: CursorAccessListener[] = [];
 
 /**
  * Registers a listener for global cursor accesses.
@@ -35,14 +31,4 @@ export function onCursorAccess(listener: CursorAccessListener): Disposer {
       cursorAccessListeners.splice(index, 1);
     }
   };
-}
-
-/**
- * Emits an event for a cursor access.
- *
- * @export
- * @param {CursorAccess} event
- */
-export function emitCursorAccess(event: CursorAccess): void {
-  cursorAccessListeners.forEach(l => l(event));
 }
