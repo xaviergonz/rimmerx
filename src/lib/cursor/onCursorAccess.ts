@@ -1,5 +1,5 @@
 import { Disposer } from "../utils";
-import { cursorAccessListeners } from "./internal/_onCursorAccess";
+import { getCursorAccessEventHandler } from "./internal/_onCursorAccess";
 
 /**
  * Event generated when a cursor is read (accessed).
@@ -23,12 +23,5 @@ export type CursorAccessListener = (event: CursorAccess) => void;
  * @returns {Disposer}
  */
 export function onCursorAccess(listener: CursorAccessListener): Disposer {
-  cursorAccessListeners.push(listener);
-
-  return () => {
-    const index = cursorAccessListeners.indexOf(listener);
-    if (index >= 0) {
-      cursorAccessListeners.splice(index, 1);
-    }
-  };
+  return getCursorAccessEventHandler().subscribe(listener);
 }

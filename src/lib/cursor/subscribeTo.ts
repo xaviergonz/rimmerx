@@ -5,7 +5,11 @@ import { getStoreObject } from "./internal/_cursor";
 /**
  * Subscription listener callback.
  */
-export type SubscriptionListener<T> = (newValue: T | typeof broken, oldValue: T | typeof broken) => void;
+export type SubscriptionListener<T> = (
+  newValue: T | typeof broken,
+  oldValue: T | typeof broken,
+  transactionId?: number
+) => void;
 
 /**
  * Run a callback whenever the value the cursor points to changes.
@@ -15,20 +19,20 @@ export type SubscriptionListener<T> = (newValue: T | typeof broken, oldValue: T 
  * @export
  * @template T
  * @param {T} cursor
- * @param {((newValue: T | typeof broken, oldValue: T | typeof broken) => void)} subscription
+ * @param {SubscriptionListener<T>} subscription
  * @returns {Disposer}
  */
 export function subscribeTo<T>(cursor: T, subscription: SubscriptionListener<T>): Disposer {
   let currentValue = _(cursor);
 
   const store = getStoreObject(cursor);
-  return store.subscribeToChanges(() => {
+  return store.subscribeToChanges(transactionId => {
     const oldValue = currentValue;
     const newValue = _(cursor);
     currentValue = newValue;
 
     if (oldValue !== newValue) {
-      subscription(newValue, oldValue);
+      subscription(newValue, oldValue, transactionId);
     }
   });
 }

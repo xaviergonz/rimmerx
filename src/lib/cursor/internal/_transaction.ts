@@ -1,6 +1,8 @@
 import { devMode } from "../../devMode";
+import { Disposer, EventHandler } from "../../utils";
 
 let transactionLock = 0;
+let currentTransactionId = 0;
 
 function insideTransaction() {
   return transactionLock > 0;
@@ -8,6 +10,7 @@ function insideTransaction() {
 
 export function lockTransaction() {
   transactionLock++;
+  return currentTransactionId;
 }
 
 export function unlockTransaction() {
@@ -17,17 +20,31 @@ export function unlockTransaction() {
     throw new Error("assertion error: negative transaction lock");
   }
   if (transactionLock === 0) {
+    const finishedTransactionId = currentTransactionId;
+    currentTransactionId++;
     const queue = afterTransactionQueue;
     afterTransactionQueue = [];
-    queue.forEach(fn => fn());
+    queue.forEach(fn => fn(finishedTransactionId));
+    transactionFinishedEventHandler.emit(finishedTransactionId);
   }
 }
 
-let afterTransactionQueue: (() => void)[] = [];
+type TransactionFinishedListener = (transactionId: number | undefined) => void;
 
-export function runWhenNoTransaction(fn: () => void): void {
+const transactionFinishedEventHandler = new EventHandler<TransactionFinishedListener>();
+
+export function onTransactionFinished(fn: TransactionFinishedListener): Disposer {
+  return transactionFinishedEventHandler.subscribe(fn);
+}
+
+type TransactionCallback = (transactionId: number | undefined) => void;
+
+let afterTransactionQueue: TransactionCallback[] = [];
+
+export function runWhenOutsideTransaction(fn: TransactionCallback): void {
   if (!insideTransaction()) {
-    fn();
+    fn(undefined);
+    transactionFinishedEventHandler.emit(undefined);
   } else {
     afterTransactionQueue.push(fn);
   }

@@ -1,5 +1,5 @@
 import { runCursor } from "./internal/_cursor";
-import { emitCursorAccess } from "./internal/_onCursorAccess";
+import { getCursorAccessEventHandler } from "./internal/_onCursorAccess";
 
 /**
  * Indicates that a cursor value could not be calculated since the selector is broken.
@@ -17,7 +17,7 @@ export const broken = Symbol("broken");
  */
 export function _<T>(cursor: T): T {
   const value = runCursor(cursor, false, false) as T;
-  emitCursorAccess({ cursor, value });
+  getCursorAccessEventHandler().emit({ cursor, value });
   return value;
 }
 
@@ -45,7 +45,7 @@ export function get<T>(cursor: T): T {
  */
 export function _safe<T>(cursor: T): T | typeof broken {
   const value = runCursor(cursor, true, false);
-  emitCursorAccess({ cursor, value });
+  getCursorAccessEventHandler().emit({ cursor, value });
   return value;
 }
 

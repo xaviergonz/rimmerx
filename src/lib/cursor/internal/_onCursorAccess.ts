@@ -1,16 +1,6 @@
-import { CursorAccess, CursorAccessListener } from "../onCursorAccess";
+import { EventHandler } from "../../utils";
+import { CursorAccessListener } from "../onCursorAccess";
 
-/**
- * List of listeners for cursor access events.
- */
-export const cursorAccessListeners: CursorAccessListener[] = [];
+const cursorAccessEventHandler = new EventHandler<CursorAccessListener>();
 
-/**
- * Emits an event for a cursor access.
- *
- * @export
- * @param {CursorAccess} event
- */
-export function emitCursorAccess(event: CursorAccess): void {
-  cursorAccessListeners.forEach(l => l(event));
-}
+export const getCursorAccessEventHandler = () => cursorAccessEventHandler;

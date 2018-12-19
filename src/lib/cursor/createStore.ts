@@ -1,7 +1,11 @@
-import { PatchListener } from "immer";
-import { freezeData } from "../utils";
-import { newCursorObject, StoreObject } from "./internal/_cursor";
-import { runWhenNoTransaction as runWhenOutsideTransaction } from "./internal/_transaction";
+import { EventHandler, freezeData } from "../utils";
+import {
+  newCursorObject,
+  StoreObject,
+  SubscribeToChangesListener,
+  SubscribeToPatchesListener
+} from "./internal/_cursor";
+import { runWhenOutsideTransaction } from "./internal/_transaction";
 
 /**
  * Creates a new store cursor.
@@ -14,8 +18,8 @@ import { runWhenNoTransaction as runWhenOutsideTransaction } from "./internal/_t
 export function createStore<T>(data: T): T {
   let currentStoreRoot = freezeData(data);
   let nofChanges = 0;
-  const changeListeners: Set<() => void> = new Set();
-  const patchListeners: Set<PatchListener> = new Set();
+  const changeEventHandler = new EventHandler<SubscribeToChangesListener>();
+  const patchEventHandler = new EventHandler<SubscribeToPatchesListener>();
 
   const storeObject: StoreObject<T> = {
     get store() {
@@ -28,8 +32,8 @@ export function createStore<T>(data: T): T {
 
       nofChanges++;
       currentStoreRoot = freezeData(newStore);
-      runWhenOutsideTransaction(() => {
-        changeListeners.forEach(s => s());
+      runWhenOutsideTransaction(transactionId => {
+        changeEventHandler.emit(transactionId);
       });
     },
 
@@ -41,24 +45,16 @@ export function createStore<T>(data: T): T {
     },
 
     subscribeToChanges(fn) {
-      changeListeners.add(fn);
-      return () => {
-        changeListeners.delete(fn);
-      };
+      return changeEventHandler.subscribe(fn);
     },
 
     subscribeToPatches(fn) {
-      patchListeners.add(fn);
-      return () => {
-        patchListeners.delete(fn);
-      };
+      return patchEventHandler.subscribe(fn);
     },
 
     emitPatches(patches, inversePatches) {
-      runWhenOutsideTransaction(() => {
-        patchListeners.forEach(l => {
-          l(patches, inversePatches);
-        });
+      runWhenOutsideTransaction(transactionId => {
+        patchEventHandler.emit(transactionId, patches, inversePatches);
       });
     }
   };

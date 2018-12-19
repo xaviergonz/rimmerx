@@ -65,3 +65,31 @@ function isPlainObject(value: any): value is any {
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
 }
+
+type ArgumentsOf<FN> = FN extends (...args: infer ARGS) => any ? ARGS : never;
+
+/**
+ * @internal
+ * @private
+ */
+export class EventHandler<FN extends (...args: any[]) => void> {
+  private listeners: FN[] = [];
+
+  subscribe(fn: FN): Disposer {
+    this.listeners.push(fn);
+    return () => {
+      const index = this.listeners.indexOf(fn);
+      if (index >= 0) {
+        this.listeners.splice(index, 1);
+      }
+    };
+  }
+
+  emit(...args: ArgumentsOf<FN>): void {
+    this.listeners.forEach(ln => ln(...args));
+  }
+
+  clearListeners(): void {
+    this.listeners = [];
+  }
+}

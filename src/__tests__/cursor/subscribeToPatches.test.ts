@@ -1,4 +1,5 @@
-import { PatchListener, rollbackUpdate, subscribeToPatches, update } from "../..";
+import { PatchListener } from "immer";
+import { rollbackUpdate, subscribeToPatches, update } from "../..";
 import { $data, $firstUser } from "./testbed";
 
 test("subscribeToPatches", () => {

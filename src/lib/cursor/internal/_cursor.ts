@@ -1,4 +1,4 @@
-import { Patch, PatchListener } from "immer";
+import { Patch } from "immer";
 import { devMode } from "../../devMode";
 import { Disposer, freezeData } from "../../utils";
 import { broken } from "../get";
@@ -32,6 +32,13 @@ export interface CursorObject {
   cache: Map<CursorStep, CursorObject>;
 }
 
+export type SubscribeToChangesListener = (transactionId: number | undefined) => void;
+export type SubscribeToPatchesListener = (
+  transactionId: number | undefined,
+  patches: Patch[],
+  inversePatches: Patch[]
+) => void;
+
 /**
  * Root store administration object for a cursor.
  */
@@ -41,8 +48,8 @@ export interface StoreObject<T> {
   updateCancelled: boolean;
   nofChanges: number;
 
-  subscribeToChanges(fn: () => void): Disposer;
-  subscribeToPatches(fn: PatchListener): Disposer;
+  subscribeToChanges(fn: SubscribeToChangesListener): Disposer;
+  subscribeToPatches(fn: SubscribeToPatchesListener): Disposer;
   emitPatches(patches: Patch[], inversePatches: Patch[]): void;
 }
 

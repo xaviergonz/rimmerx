@@ -1,4 +1,4 @@
-import { Disposer } from "../utils";
+import { Disposer, EventHandler } from "../utils";
 import { CursorAccess } from "./onCursorAccess";
 import { subscribeTo } from "./subscribeTo";
 import { trackCursorAccess } from "./trackCursorAccess";
@@ -17,7 +17,7 @@ export type CursorChangeListener = (cursor: any, newValue: any, oldValue: any) =
  */
 export class CursorChangesTracker {
   private subscriptionDisposers = new Map<any, Disposer>();
-  private listeners: CursorChangeListener[] = [];
+  private readonly eventHandler = new EventHandler<CursorChangeListener>();
 
   /**
    * Tracks any accesses to cursors inside the function and subscribes
@@ -37,7 +37,7 @@ export class CursorChangesTracker {
       const disposer =
         this.subscriptionDisposers.get(cursor) ||
         subscribeTo(cursor, (newVal, oldVal) => {
-          this.emit(cursor, newVal, oldVal);
+          this.eventHandler.emit(cursor, newVal, oldVal);
         });
       newSubscriptionDisposers.set(cursor, disposer);
     });
@@ -54,13 +54,7 @@ export class CursorChangesTracker {
    * @memberof CursorChangesTracker
    */
   subscribe(listener: CursorChangeListener): Disposer {
-    this.listeners.push(listener);
-    return () => {
-      const index = this.listeners.indexOf(listener);
-      if (index >= 0) {
-        this.listeners.splice(index, 1);
-      }
-    };
+    return this.eventHandler.subscribe(listener);
   }
 
   /**
@@ -71,10 +65,6 @@ export class CursorChangesTracker {
   dispose() {
     this.subscriptionDisposers.forEach(d => d());
     this.subscriptionDisposers.clear();
-    this.listeners = [];
+    this.eventHandler.clearListeners();
   }
-
-  private emit = (cursor: any, newVal: any, oldVal: any) => {
-    this.listeners.forEach(l => l(cursor, newVal, oldVal));
-  };
 }

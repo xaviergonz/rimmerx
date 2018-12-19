@@ -1,6 +1,8 @@
-import { PatchListener } from "immer";
+import { Patch } from "immer";
 import { Disposer } from "../utils";
 import { getCursorObject, getStoreObject } from "./internal/_cursor";
+
+export type PatchesSubscriptionListener = (patches: Patch[], invsersePatches: Patch[], transactionId?: number) => void;
 
 /**
  * Run a callback whenever a store generates a set of patches / inverse patches as result of a change.
@@ -9,15 +11,17 @@ import { getCursorObject, getStoreObject } from "./internal/_cursor";
  *
  * @export
  * @param {*} rootCursor
- * @param {PatchListener} patchListener
+ * @param {PatchesSubscriptionListener} patchListener
  * @returns {Disposer}
  */
-export function subscribeToPatches(rootCursor: any, patchListener: PatchListener): Disposer {
+export function subscribeToPatches(rootCursor: any, patchListener: PatchesSubscriptionListener): Disposer {
   const cursorObj = getCursorObject(rootCursor);
   if (cursorObj.path.length !== 1) {
     throw new Error("patch subscription can only be done on root cursors");
   }
 
   const store = getStoreObject(rootCursor);
-  return store.subscribeToPatches(patchListener);
+  return store.subscribeToPatches((transactionId, patches, invsersePatches) =>
+    patchListener(patches, invsersePatches, transactionId)
+  );
 }
