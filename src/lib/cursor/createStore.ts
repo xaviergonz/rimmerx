@@ -1,6 +1,7 @@
 import { PatchListener } from "immer";
 import { freezeData } from "../utils";
 import { newCursorObject, StoreObject } from "./internal/_cursor";
+import { runWhenNoTransaction as runWhenOutsideTransaction } from "./internal/_transaction";
 
 /**
  * Creates a new store cursor.
@@ -27,7 +28,9 @@ export function createStore<T>(data: T): T {
 
       nofChanges++;
       currentStoreRoot = freezeData(newStore);
-      changeListeners.forEach(s => s());
+      runWhenOutsideTransaction(() => {
+        changeListeners.forEach(s => s());
+      });
     },
 
     draftStore: undefined,
@@ -52,8 +55,10 @@ export function createStore<T>(data: T): T {
     },
 
     emitPatches(patches, inversePatches) {
-      patchListeners.forEach(l => {
-        l(patches, inversePatches);
+      runWhenOutsideTransaction(() => {
+        patchListeners.forEach(l => {
+          l(patches, inversePatches);
+        });
       });
     }
   };

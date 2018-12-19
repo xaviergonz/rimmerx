@@ -1,5 +1,3 @@
-// cursor private internals
-
 import { Patch, PatchListener } from "immer";
 import { devMode } from "../../devMode";
 import { Disposer, freezeData } from "../../utils";

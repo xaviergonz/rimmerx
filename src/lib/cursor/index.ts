@@ -8,4 +8,5 @@ export * from "./set";
 export * from "./subscribeTo";
 export * from "./subscribeToPatches";
 export * from "./trackCursorAccess";
+export * from "./transaction";
 export * from "./update";
