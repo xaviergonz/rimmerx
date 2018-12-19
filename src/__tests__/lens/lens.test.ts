@@ -1,5 +1,5 @@
-import { createStore, getLensCursor, getLensData, lens, subscribeTo, _ } from "..";
-import { devMode } from "../lib/devMode";
+import { createStore, getLensCursor, getLensData, lens, subscribeTo, _ } from "../..";
+import { devMode } from "../../lib/devMode";
 
 interface User {
   name: string;
