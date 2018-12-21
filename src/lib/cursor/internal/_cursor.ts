@@ -2,7 +2,7 @@ import { Patch } from "immer";
 import { devMode } from "../../devMode";
 import { Disposer, freezeData } from "../../utils";
 import { broken } from "../get";
-import { CursorCallStep, CursorStep, isCursor } from "../misc";
+import { CursorCallStep, CursorStep, CursorTransformStep, isCursor } from "../misc";
 
 /**
  * Symbol used to access the cursor administration object.
@@ -96,7 +96,7 @@ export function getStoreObject<T = any>(cursor: any): StoreObject<T> {
  * @param {CursorStep} step
  * @returns
  */
-function stepCursor(cursor: any, step: CursorStep): CursorObject {
+export function stepCursor(cursor: any, step: CursorStep): CursorObject {
   const cursorObj = getCursorObject(cursor);
   return newCursorObject(cursorObj.store, [...cursorObj.path, step], cursorObj);
 }
@@ -134,9 +134,12 @@ export function runCursor<T>(cursor: T, safeMode: boolean, draft: boolean): T | 
     if (safeMode && (value === undefined || value === null)) {
       return broken;
     }
+
     if (step instanceof CursorCallStep) {
       const targetThis = isCursor(step.ctx) ? runCursor(step.ctx, safeMode, draft) : step.ctx;
       value = value.apply(targetThis, step.args);
+    } else if (step instanceof CursorTransformStep) {
+      value = step.transform(value);
     } else {
       value = value[step];
     }

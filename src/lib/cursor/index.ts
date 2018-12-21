@@ -9,4 +9,5 @@ export * from "./subscribeTo";
 export * from "./subscribeToPatches";
 export * from "./trackCursorAccess";
 export * from "./transaction";
+export * from "./transform";
 export * from "./update";

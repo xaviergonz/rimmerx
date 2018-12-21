@@ -1,11 +1,21 @@
 import { broken, get, safeGet, update, _, _safe } from "../..";
-import { $activeUsers, $broken, $data, $firstUser, $firstUserName, $users, data } from "./testbed";
+import {
+  $activeUsers,
+  $broken,
+  $data,
+  $firstUser,
+  $firstUserName,
+  $firstUserNameInObject,
+  $users,
+  data
+} from "./testbed";
 
 test("reading values", () => {
   expect(_($data)).toBe(data);
   expect(_($users)).toBe(data.users);
   expect(get($firstUser)).toEqual(data.users[0]);
   expect(_($firstUserName)).toBe(data.users[0].name);
+  expect(_($firstUserNameInObject)).toEqual({ name: data.users[0].name.toUpperCase() });
   expect(_($activeUsers)).toEqual(["first", "third"]);
   expect(() => _($broken)).toThrow("Cannot read property '0' of undefined");
 
@@ -49,4 +59,27 @@ test("function cursor value caching", () => {
   // same value, but different reference
   expect(_($activeUsers)).toEqual(activeUsers1);
   expect(_($activeUsers)).not.toBe(activeUsers1);
+});
+
+test("transformed cursor value caching", () => {
+  const obj1 = _($firstUserNameInObject);
+  const obj2 = _($firstUserNameInObject);
+
+  expect(obj1).toBe(obj2);
+
+  update($firstUser, fu => {
+    fu.name = "_" + fu.name;
+  });
+
+  // different reference and value
+  expect(_($firstUserNameInObject)).not.toEqual(obj1);
+  expect(_($firstUserNameInObject)).not.toBe(obj1);
+
+  update($firstUser, fu => {
+    fu.name = fu.name.substr(1);
+  });
+
+  // same value, but different reference
+  expect(_($firstUserNameInObject)).toEqual(obj1);
+  expect(_($firstUserNameInObject)).not.toBe(obj2);
 });

@@ -1,15 +1,22 @@
 import { cursorObject, getCursorObject } from "./internal/_cursor";
 
 /**
- * A cursor step (key access or function call).
+ * A cursor step (key access, function call or transform).
  */
-export type CursorStep = string | number | symbol | CursorCallStep;
+export type CursorStep = string | number | symbol | CursorCallStep | CursorTransformStep;
 
 /**
  * A cursor function call step.
  */
 export class CursorCallStep {
   constructor(readonly ctx: any, readonly args: any) {}
+}
+
+/**
+ * A cursor transform step.
+ */
+export class CursorTransformStep {
+  constructor(readonly transform: (value: any) => any) {}
 }
 
 /**
