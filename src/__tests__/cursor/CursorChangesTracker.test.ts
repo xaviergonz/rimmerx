@@ -8,11 +8,12 @@ test("CursorChangesTracker", () => {
     evs.push(changes);
   });
 
-  const expectChange = (changes: CursorChange[]) => {
+  const expectChange = (changes: Partial<CursorChange>[]) => {
     expect(evs.length).toBe(1);
     expect(evs[0].length).toBe(changes.length);
     changes.forEach((ch, i) => {
       const ev = evs[0][i];
+      expect(ev.changed).toBe(true);
       expect(ev.cursor).toBe(ch.cursor);
       expect(ev.newValue).toEqual(ch.newValue);
       expect(ev.oldValue).toEqual(ch.oldValue);

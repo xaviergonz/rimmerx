@@ -1,22 +1,12 @@
 import { Disposer, EventHandler } from "../utils";
-import { onTransactionFinished } from "./internal/_transaction";
 import { CursorAccess } from "./onCursorAccess";
-import { subscribeTo } from "./subscribeTo";
+import { CursorChange, subscribeToMany } from "./subscribeTo";
 import { trackCursorAccess } from "./trackCursorAccess";
-
-/**
- * Describes a single cursor change.
- */
-export interface CursorChange<T = any> {
-  cursor: T;
-  newValue: T;
-  oldValue: T;
-}
 
 /**
  * Listener for the cursor changes tracker.
  */
-export type CursorChangesListener = (changes: CursorChange[]) => void;
+export type CursorChangesListener = (changes: CursorChange<any>[]) => void;
 
 /**
  * Tracks cursor accesses inside a function and generates events any time
@@ -26,17 +16,8 @@ export type CursorChangesListener = (changes: CursorChange[]) => void;
  * @class CursorChangesTracker
  */
 export class CursorChangesTracker {
-  private subscriptionDisposers = new Map<any, Disposer>();
+  private subscriptionDisposer?: Disposer;
   private readonly eventHandler = new EventHandler<CursorChangesListener>();
-  private changes: CursorChange[] = [];
-
-  private readonly onTransactionFinishedDisposer = onTransactionFinished(() => {
-    if (this.changes.length > 0) {
-      const changes = this.changes;
-      this.changes = [];
-      this.eventHandler.emit(changes);
-    }
-  });
 
   /**
    * Tracks any accesses to cursors inside the function and subscribes
@@ -47,26 +28,13 @@ export class CursorChangesTracker {
    * @memberof CursorChangesTracker
    */
   track(fn: () => void): CursorAccess[] {
+    if (this.subscriptionDisposer) {
+      this.subscriptionDisposer();
+    }
+
     const accesses = trackCursorAccess(fn);
 
-    const newSubscriptionDisposers = new Map<any, Disposer>();
-    accesses.forEach(a => {
-      const cursor = a.cursor;
-      // try to reuse already made subscriptions
-      const disposer =
-        this.subscriptionDisposers.get(cursor) ||
-        subscribeTo(cursor, (newValue, oldValue) => {
-          const change = {
-            cursor,
-            newValue,
-            oldValue
-          };
-          this.changes.push(change);
-        });
-      newSubscriptionDisposers.set(cursor, disposer);
-    });
-    this.subscriptionDisposers = newSubscriptionDisposers;
-
+    this.subscriptionDisposer = subscribeToMany(accesses.map(a => a.cursor), this.emitChanges);
     return accesses;
   }
 
@@ -87,9 +55,18 @@ export class CursorChangesTracker {
    * @memberof CursorChangesTracker
    */
   dispose() {
-    this.subscriptionDisposers.forEach(d => d());
-    this.subscriptionDisposers.clear();
+    if (this.subscriptionDisposer) {
+      this.subscriptionDisposer();
+      this.subscriptionDisposer = undefined;
+    }
     this.eventHandler.clearListeners();
-    this.onTransactionFinishedDisposer();
   }
+
+  private emitChanges = (changes: CursorChange<any>[]) => {
+    // only emit stuff that actually changed
+    const realChanges = changes.filter(c => c.changed);
+    if (realChanges.length > 0) {
+      this.eventHandler.emit(realChanges);
+    }
+  };
 }

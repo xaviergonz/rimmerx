@@ -1,12 +1,22 @@
-import { subscribeTo, update } from "../..";
-import { $activeUsers, $firstUser, $firstUserName } from "./testbed";
+import { set, subscribeTo, subscribeToMany, update } from "../..";
+import { transaction } from "../../lib/cursor";
+import { $activeUsers, $firstUser, $firstUserName, $users } from "./testbed";
 
 test("subscription - values", () => {
+  const $secondUserName = $users[1].name;
+
   let calls = 0;
-  const disposer = subscribeTo($firstUserName, (newVal, oldVal) => {
+  const disposer = subscribeToMany([$firstUserName, $secondUserName], ([firstUserNameChange, secondUserNameChange]) => {
     calls++;
-    expect(newVal).toBe("first_updated");
-    expect(oldVal).toBe("first");
+    expect(firstUserNameChange.cursor).toBe($firstUserName);
+    expect(firstUserNameChange.changed).toBe(true);
+    expect(firstUserNameChange.newValue).toBe("first_updated");
+    expect(firstUserNameChange.oldValue).toBe("first");
+
+    expect(secondUserNameChange.cursor).toBe($secondUserName);
+    expect(secondUserNameChange.changed).toBe(true);
+    expect(secondUserNameChange.newValue).toBe("second_updated");
+    expect(secondUserNameChange.oldValue).toBe("second");
   });
 
   // no call if unchanged
@@ -16,8 +26,9 @@ test("subscription - values", () => {
   expect(calls).toBe(0);
 
   // call when changed
-  update($firstUserName, () => {
-    return "first_updated";
+  transaction(() => {
+    set($firstUserName, "first_updated");
+    set($secondUserName, "second_updated");
   });
   expect(calls).toBe(1);
 
@@ -31,10 +42,10 @@ test("subscription - values", () => {
 
 test("subscription - functions", () => {
   let calls = 0;
-  const disposer = subscribeTo($activeUsers, (newVal, oldVal) => {
+  const disposer = subscribeTo($activeUsers, ({ newValue, oldValue }) => {
     calls++;
-    expect(newVal).toEqual(["third"]);
-    expect(oldVal).toEqual(["first", "third"]);
+    expect(newValue).toEqual(["third"]);
+    expect(oldValue).toEqual(["first", "third"]);
   });
 
   // no call if unchanged

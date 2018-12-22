@@ -40,13 +40,13 @@ test("update - functional works", () => {
 
 test("nested updates", () => {
   let calls = 0;
-  subscribeTo($firstUser, (newVal, oldVal) => {
+  subscribeTo($firstUser, ({ newValue, oldValue }) => {
     calls++;
-    expect(newVal).toEqual({
+    expect(newValue).toEqual({
       name: "first_u1_u2",
       active: false
     });
-    expect(oldVal).toEqual({
+    expect(oldValue).toEqual({
       name: "first",
       active: true
     });

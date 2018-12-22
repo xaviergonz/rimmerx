@@ -4,10 +4,10 @@ import { $data, $firstUser, data } from "./testbed";
 
 test("transaction", () => {
   let subscribeCalls = 0;
-  subscribeTo($firstUser, (newVal, oldVal) => {
+  subscribeTo($firstUser, ({ newValue, oldValue }) => {
     subscribeCalls++;
-    expect(oldVal).toEqual(data.users[0]);
-    expect(newVal).toEqual({
+    expect(oldValue).toEqual(data.users[0]);
+    expect(newValue).toEqual({
       name: "john",
       active: false
     });

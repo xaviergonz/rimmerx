@@ -1,4 +1,4 @@
-import { subscribeTo, SubscriptionListener, transaction, update, _ } from "../cursor";
+import { subscribeTo, SubscribeToListener, transaction, update, _ } from "../cursor";
 import { Disposer } from "../utils";
 import {
   ensureIsLens,
@@ -174,7 +174,7 @@ export function lens<T extends object, V, A>(
  */
 export function subscribeToLens<L extends AnyLens>(
   lensInstance: L,
-  subscription: SubscriptionListener<ExtractLensT<L>>
+  subscription: SubscribeToListener<ExtractLensT<L>>
 ): Disposer {
   const cursor = getLensCursor(lensInstance);
   return subscribeTo(cursor, subscription);

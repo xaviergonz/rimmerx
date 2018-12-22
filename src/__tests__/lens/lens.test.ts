@@ -167,13 +167,13 @@ test("getters work", () => {
 
 test("actions work", () => {
   let calls = 0;
-  subscribeTo($firstUser, (newVal, oldVal) => {
+  subscribeTo($firstUser, ({ newValue, oldValue }) => {
     calls++;
-    expect(oldVal).toEqual({
+    expect(oldValue).toEqual({
       name: "first",
       active: true
     });
-    expect(newVal).toEqual({
+    expect(newValue).toEqual({
       name: "myname",
       active: false
     });
